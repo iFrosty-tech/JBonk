@@ -1,12 +1,15 @@
 import type { WeaponDef, WeaponStats } from '../config/types';
 import type { Frame } from '../render/atlas';
-import type { Enemy } from './entities';
+import { HIVES, type HiveLayout } from '../render/logos/index';
+import type { Enemy, Projectile } from './entities';
 import type { Game } from './game';
 
 // Comportamento delle armi. Ogni "kind" è un pattern riusabile: nuove armi a tema
 // si aggiungono in config/weapons.ts senza toccare questo file.
 // 'minion' usa gli sprite <sprite>, <sprite>_idle, <sprite>_hit e <sprite>_spark;
 // 'lob' usa <sprite> (in volo), <sprite>_splash e <sprite>_steam (la pozza).
+// 'split' usa <sprite> (in volo), <sprite>_l e <sprite>_r (i frammenti), <sprite>_stem e <sprite>_burst.
+// 'swarm' usa l'alveare HIVES[<sprite>] (celle <sprite>_c0…), <sprite>_fly e <sprite>_burst.
 
 /** Aiutante autonomo (arma 'minion'): corre dal bersaglio, colpisce, torna dal giocatore. */
 export interface Minion {
@@ -46,7 +49,35 @@ export interface Pool {
   tick: number;
 }
 
+/** Disco che va e torna (arma 'boomerang'). */
+export interface Disc {
+  x: number;
+  y: number;
+  z: number;
+  vx: number; // direzione (unitaria)
+  vz: number;
+  sp: number; // velocità
+  back: boolean;
+  t: number;
+  hits: Map<number, number>; // nemico → istante da cui può essere colpito di nuovo
+}
+
+/** Cella dell'alveare in volo verso un nemico (arma 'swarm'). */
+export interface Bee {
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  target: Enemy | null; // senza bersaglio torna al suo posto nell'alveare
+  cell: number;
+  t: number;
+  rot: number;
+}
+
 const LOB_GRAVITY = 30;
+const HIVE_WIDTH = 2.1; // larghezza dell'alveare in unità mondo
 
 export class WeaponInstance {
   level = 1;
@@ -60,6 +91,10 @@ export class WeaponInstance {
   minions: Minion[] = [];
   lobs: Lob[] = [];
   pools: Pool[] = [];
+  discs: Disc[] = [];
+  readonly hive = { x: 0, y: 0, z: 0, ready: false };
+  cells: number[] = []; // per cella dell'alveare: 1 = al suo posto, 0..1 = ricresce, -1 = in volo
+  bees: Bee[] = [];
 
   constructor(readonly def: WeaponDef) {
     this.stats = { ...def.base };
@@ -70,6 +105,10 @@ export class WeaponInstance {
     this.strikes.length = 0;
     this.lobs = [];
     this.pools = [];
+    this.discs = [];
+    this.bees = [];
+    this.hive.ready = false;
+    this.cells.fill(1);
     for (const m of this.minions) {
       m.x = x + (Math.random() - 0.5) * 3;
       m.z = z + (Math.random() - 0.5) * 3;
@@ -81,6 +120,46 @@ export class WeaponInstance {
 
 const tmp: Enemy[] = [];
 const tmpPt = { x: 0, z: 0 };
+const cellPt = { x: 0, y: 0, z: 0 };
+
+/** Posizione nel mondo di una cella dell'alveare: le celle stanno su un piano rivolto alla camera. */
+function cellPos(w: WeaponInstance, g: Game, hive: HiveLayout, i: number) {
+  const s = HIVE_WIDTH / hive.size;
+  const c = hive.cells[i];
+  const r = g.rig.right;
+  const f = g.rig.forward;
+  cellPt.x = w.hive.x + r.x * c.x * s - f.x * i * 0.02; // piccolo scarto in profondità: niente sfarfallio tra i bordi
+  cellPt.y = w.hive.y - c.y * s;
+  cellPt.z = w.hive.z + r.z * c.x * s - f.z * i * 0.02;
+  return cellPt;
+}
+
+/** Arma 'split': il proiettile si divide in frammenti diretti ai nemici vicini (o a ventaglio). */
+export function splitProjectile(g: Game, w: WeaponInstance, pr: Projectile, hit: Enemy) {
+  pr.alive = false;
+  const sprite = w.def.sprite;
+  const area = w.stats.area * g.stats.area;
+  const near = g.nearestEnemies(hit.x, hit.z, 9 * area, pr.split + 1).filter((e) => e !== hit);
+  const base = Math.atan2(pr.vz, pr.vx);
+  const sp = Math.hypot(pr.vx, pr.vz) * 0.85;
+  for (let i = 0; i < pr.split; i++) {
+    const t = near[i];
+    const a = t ? Math.atan2(t.z - hit.z, t.x - hit.x) : base + (i - (pr.split - 1) / 2) * 0.9;
+    const sh = g.spawnProjectile(w, hit.x, pr.y, hit.z, Math.cos(a) * sp, 0, Math.sin(a) * sp, 1.05 * area, 0.6, (i % 2 ? 1 : -1) * 10);
+    sh.frame = g.frame(`${sprite}_${i % 2 ? 'r' : 'l'}`);
+    sh.damage = pr.damage * 0.7;
+    sh.pierce = 0;
+    sh.hits.push(hit.id);
+  }
+  g.spawnFx(`${sprite}_burst`, hit.x, pr.y, hit.z, { size0: 1.6 * area, size1: 2.6 * area, life: 0.3, anim: true });
+  g.spawnFx(`${sprite}_stem`, hit.x, pr.y, hit.z, { size0: 0.8, size1: 0.6, life: 0.7, vx: (Math.random() - 0.5) * 3, vy: 4, vz: (Math.random() - 0.5) * 3, gravity: 18, spin: 7 });
+  g.audio.play('split');
+}
+
+function easeOutBack(x: number) {
+  const c = 1.70158;
+  return 1 + (c + 1) * (x - 1) ** 3 + c * (x - 1) ** 2;
+}
 
 /** Nemico più vicino all'aiutante, entro `range` dal giocatore; evita quelli già presi da altri aiutanti. */
 function minionTarget(g: Game, m: Minion, range: number, taken: Set<number>): Enemy | null {
@@ -375,6 +454,183 @@ export function updateWeapon(w: WeaponInstance, g: Game, dt: number) {
       if (w.pools.some((x) => x.t <= 0)) w.pools = w.pools.filter((x) => x.t > 0);
       break;
     }
+    case 'boomerang': {
+      const v0 = st.speed * s.projSpeed;
+      const R = st.range;
+      w.timer -= dt;
+      if (w.timer <= 0) {
+        const t = g.nearestEnemies(p.x, p.z, R * 1.2, 1)[0];
+        if (!t) w.timer = 0.2;
+        else {
+          w.timer = cd;
+          const n = st.count + s.projectiles;
+          const a0 = Math.atan2(t.z - p.z, t.x - p.x);
+          for (let i = 0; i < n; i++) {
+            const a = a0 + (i - (n - 1) / 2) * 0.42;
+            w.discs.push({ x: p.x, y: p.y + 1.2, z: p.z, vx: Math.cos(a), vz: Math.sin(a), sp: v0, back: false, t: 0, hits: new Map() });
+          }
+          g.audio.play('swish');
+        }
+      }
+      // all'andata rallenta fino a fermarsi a distanza R, poi torna dal giocatore accelerando
+      const decel = (v0 * v0) / (2 * R);
+      const hitR = (w.def.scale ?? 1.9) * area * 0.42;
+      for (const d of w.discs) {
+        d.t += dt;
+        if (!d.back) {
+          d.sp -= decel * dt;
+          if (d.sp <= 0) {
+            d.back = true;
+            d.sp = 0;
+            d.hits.clear(); // al ritorno può colpire di nuovo gli stessi nemici
+          }
+        } else {
+          const dx = p.x - d.x;
+          const dz = p.z - d.z;
+          const dd = Math.hypot(dx, dz) || 1;
+          if (dd < 1.2 || d.t > 6) {
+            d.t = Infinity; // ripreso al volo
+            continue;
+          }
+          d.vx = dx / dd;
+          d.vz = dz / dd;
+          d.sp = Math.min(v0 * 1.3, d.sp + decel * 1.4 * dt);
+        }
+        d.x += d.vx * d.sp * dt;
+        d.z += d.vz * d.sp * dt;
+        d.y += (Math.max(p.y + 1.1, g.world.height(d.x, d.z) + 0.8) - d.y) * (1 - Math.exp(-10 * dt));
+        for (const e of g.enemiesNear(d.x, d.z, hitR + 3, tmp)) {
+          if (!e.alive || d.y < e.y - 0.6 || d.y > e.y + e.height + 0.6) continue;
+          if ((e.x - d.x) ** 2 + (e.z - d.z) ** 2 > (hitR + e.radius) ** 2) continue;
+          if ((d.hits.get(e.id) ?? 0) > g.runTime) continue;
+          d.hits.set(e.id, g.runTime + 0.5);
+          g.damageEnemy(e, st.damage, w, d.vx * st.knockback, d.vz * st.knockback);
+        }
+      }
+      if (w.discs.some((d) => d.t === Infinity)) w.discs = w.discs.filter((d) => d.t !== Infinity);
+      break;
+    }
+    case 'split': {
+      w.timer -= dt;
+      if (w.timer > 0) break;
+      const n = st.count + s.projectiles;
+      const targets = g.nearestEnemies(p.x, p.z, st.range, n);
+      if (!targets.length) {
+        w.timer = 0.15;
+        break;
+      }
+      w.timer = cd;
+      const sp = st.speed * s.projSpeed;
+      const frames = g.anim(w.def.sprite);
+      for (let i = 0; i < n; i++) {
+        const t = targets[i % targets.length];
+        const y0 = p.y + 1.2;
+        const dx = t.x - p.x;
+        const dz = t.z - p.z;
+        const dy = t.y + t.height * 0.5 - y0;
+        const a = Math.atan2(dz, dx) + (i >= targets.length ? (i - targets.length + 1) * 0.2 : 0);
+        const hd = Math.hypot(dx, dz) || 1;
+        const pr = g.spawnProjectile(w, p.x, y0, p.z, Math.cos(a) * sp, (dy / hd) * sp, Math.sin(a) * sp, (w.def.scale ?? 1.6) * area, st.duration * s.duration, (i % 2 ? 1 : -1) * 4);
+        pr.anim = frames;
+        pr.split = Math.round(st.pierce);
+        pr.pierce = 0;
+      }
+      g.audio.play('shoot');
+      break;
+    }
+    case 'swarm': {
+      const hive = HIVES[w.def.sprite];
+      if (!hive) break;
+      const N = hive.cells.length;
+      if (w.cells.length !== N) w.cells = Array.from({ length: N }, () => 1);
+      // l'alveare galleggia sopra il giocatore, dalla parte opposta al compagno
+      const f = g.rig.forward;
+      const r = g.rig.right;
+      const H = w.hive;
+      const hx = p.x - f.x * 0.6 + r.x * 1.5 * p.face;
+      const hz = p.z - f.z * 0.6 + r.z * 1.5 * p.face;
+      const hy = p.y + 3.1;
+      if (!H.ready) {
+        H.x = hx;
+        H.y = hy;
+        H.z = hz;
+        H.ready = true;
+      }
+      const k = 1 - Math.exp(-5 * dt);
+      H.x += (hx - H.x) * k;
+      H.y += (hy - H.y) * k;
+      H.z += (hz - H.z) * k;
+      for (let i = 0; i < N; i++) if (w.cells[i] >= 0 && w.cells[i] < 1) w.cells[i] = Math.min(1, w.cells[i] + dt / Math.max(0.1, st.duration));
+      w.timer -= dt;
+      if (w.timer <= 0) {
+        const ready: number[] = [];
+        for (let i = 0; i < N; i++) if (w.cells[i] === 1) ready.push(i);
+        const n = Math.min(ready.length, st.count + s.projectiles);
+        const targets = n ? g.nearestEnemies(p.x, p.z, st.range, n) : [];
+        if (!targets.length) w.timer = 0.15;
+        else {
+          w.timer = cd;
+          for (let j = 0; j < n; j++) {
+            const ci = ready.splice(Math.floor(Math.random() * ready.length), 1)[0];
+            const c = hive.cells[ci];
+            const pos = cellPos(w, g, hive, ci);
+            const out = Math.hypot(c.x, c.y) || 1;
+            w.cells[ci] = -1;
+            // si stacca verso l'esterno dell'alveare, poi curva verso il bersaglio
+            w.bees.push({
+              x: pos.x, y: pos.y, z: pos.z, vx: r.x * (c.x / out) * 6, vy: 2 - (c.y / out) * 5, vz: r.z * (c.x / out) * 6,
+              target: targets[j % targets.length], cell: ci, t: 0, rot: Math.random() * 6,
+            });
+          }
+          g.audio.play('shoot');
+        }
+      }
+      const sp = st.speed * s.projSpeed;
+      const R = 1.6 * area;
+      for (const b of w.bees) {
+        b.t += dt;
+        b.rot += dt * 6;
+        if (b.target && !b.target.alive) b.target = g.nearestEnemies(b.x, b.z, 12, 1)[0] ?? null;
+        const t = b.target;
+        const home = t ? null : cellPos(w, g, hive, b.cell);
+        const tx = t ? t.x : home!.x;
+        const ty = t ? t.y + t.height * 0.5 : home!.y;
+        const tz = t ? t.z : home!.z;
+        const dx = tx - b.x;
+        const dy = ty - b.y;
+        const dz = tz - b.z;
+        const d = Math.hypot(dx, dy, dz) || 1;
+        const speed = sp * Math.min(1.2, 0.35 + b.t * 1.6);
+        const kk = 1 - Math.exp(-6 * dt);
+        b.vx += ((dx / d) * speed - b.vx) * kk;
+        b.vy += ((dy / d) * speed - b.vy) * kk;
+        b.vz += ((dz / d) * speed - b.vz) * kk;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        b.z += b.vz * dt;
+        if (t && d < t.radius + 0.5) {
+          for (const e of g.enemiesNear(b.x, b.z, R + 3, tmp)) {
+            const ex = e.x - b.x;
+            const ez = e.z - b.z;
+            const ed = Math.hypot(ex, ez) || 1;
+            if (!e.alive || ed > R + e.radius) continue;
+            g.damageEnemy(e, st.damage, w, (ex / ed) * st.knockback, (ez / ed) * st.knockback);
+          }
+          g.spawnFx(`${w.def.sprite}_burst`, b.x, b.y, b.z, { size0: R * 1.1, size1: R * 1.9, life: 0.3, anim: true });
+          g.audio.play('pop');
+          w.cells[b.cell] = 0; // ricresce
+          b.t = Infinity;
+        } else if (!t && d < 0.35) {
+          w.cells[b.cell] = 1; // rientrato senza bersaglio
+          b.t = Infinity;
+        } else if (b.t > 5) {
+          w.cells[b.cell] = 0;
+          b.t = Infinity;
+        }
+      }
+      if (w.bees.some((b) => b.t === Infinity)) w.bees = w.bees.filter((b) => b.t !== Infinity);
+      break;
+    }
   }
 }
 
@@ -434,6 +690,47 @@ export function drawWeapon(w: WeaponInstance, g: Game) {
           const sh = (1.4 + Math.sin(g.runTime * 3 + i) * 0.25) * Math.sqrt(area) * life;
           g.fx.push(loop(steam, g.runTime + i * 0.37, 10), x, g.world.height(x, z), z, sh, i % 2 ? 1 : -1, 0, 0.85 * life);
         }
+      }
+      break;
+    }
+    case 'boomerang': {
+      const frames = g.anim(w.def.sprite);
+      const size = (w.def.scale ?? 1.9) * area;
+      w.discs.forEach((d, i) => {
+        const f = loop(frames, g.runTime + i * 0.3, 30);
+        const wob = Math.sin(d.t * 9 + i) * 0.08;
+        // scia: copie sempre più trasparenti dietro al disco
+        for (let k = 1; k <= 3; k++) {
+          const back = d.sp * k * 0.022;
+          g.fx.push(f, d.x - d.vx * back, d.y - size * 0.5, d.z - d.vz * back, size, 1, 0, 0.28 / k, wob);
+        }
+        g.solid.push(f, d.x, d.y - size * 0.5, d.z, size, 1, 0, 1, wob);
+        g.shadows.push(d.x, g.world.height(d.x, d.z), d.z, size * 0.7);
+      });
+      break;
+    }
+    case 'swarm': {
+      const hive = HIVES[w.def.sprite];
+      if (!hive || !w.hive.ready) break;
+      const h = hive.cellPx * (HIVE_WIDTH / hive.size);
+      w.cells.forEach((v, i) => {
+        if (v < 0) return; // in volo
+        const sc = v >= 1 ? 1 : Math.max(0, easeOutBack(v));
+        if (sc < 0.03) return;
+        const pos = cellPos(w, g, hive, i);
+        const bob = Math.sin(g.runTime * 2.6 + i * 1.3) * 0.06;
+        g.solid.push(g.frame(`${w.def.sprite}_c${i}`), pos.x, pos.y + bob - (h * sc) / 2, pos.z, h * sc, 1, v < 1 ? (1 - v) * 0.7 : 0);
+      });
+      g.shadows.push(w.hive.x, g.world.height(w.hive.x, w.hive.z), w.hive.z, 0.9);
+      const fly = g.anim(`${w.def.sprite}_fly`);
+      const size = 0.8;
+      for (const b of w.bees) {
+        const f = loop(fly, g.runTime + b.cell * 0.13, 16);
+        for (let k = 1; k <= 2; k++) {
+          const back = k * 0.035;
+          g.fx.push(f, b.x - b.vx * back, b.y - size * 0.5 - b.vy * back, b.z - b.vz * back, size * (1 - k * 0.15), 1, 0, 0.32 / k, b.rot);
+        }
+        g.solid.push(f, b.x, b.y - size * 0.5, b.z, size, 1, 0, 1, b.rot);
       }
       break;
     }

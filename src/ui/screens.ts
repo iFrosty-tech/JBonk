@@ -229,7 +229,11 @@ export class Screens {
           stat('Livello', String(res.level)),
           stat('Buoni pasto', `€ ${res.gold}`),
           stat('Progetti', `${res.stages}/${TUNING.stagesToWin}`),
+          stat('JOscar', String(res.joscars)),
         ),
+        ...(res.joscars
+          ? [h('div', { class: 'trophies', title: 'JOscar vinti' }, ...Array.from({ length: res.joscars }, () => icon(this.atlas, 'joscar', 72)))]
+          : []),
         h('table', { class: 'dmg' }, h('tbody', {}, ...rows)),
         h('div', { class: 'actions' }, again, m),
       ),

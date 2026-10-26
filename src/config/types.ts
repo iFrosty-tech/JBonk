@@ -128,7 +128,18 @@ export interface UpgradeDef {
   int?: boolean;
 }
 
-export type WeaponKind = 'projectile' | 'orbit' | 'aura' | 'radial' | 'strike' | 'chain' | 'minion' | 'lob';
+export type WeaponKind =
+  | 'projectile'
+  | 'orbit'
+  | 'aura'
+  | 'radial'
+  | 'strike'
+  | 'chain'
+  | 'minion'
+  | 'lob'
+  | 'boomerang' // va e torna, colpendo all'andata e al ritorno
+  | 'split' // al primo impatto si divide in `pierce` frammenti
+  | 'swarm'; // un alveare di celle che si staccano e inseguono i nemici
 
 export interface WeaponDef {
   id: string;

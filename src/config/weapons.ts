@@ -150,6 +150,58 @@ const list: WeaponDef[] = [
       { stat: 'cooldown', amount: -0.1, mode: 'mul', label: 'Cooldown' },
     ],
   },
+  {
+    id: 'spring',
+    name: 'Spring Boot',
+    description: 'Il logo di Spring lanciato come un frisbee: attraversa i nemici e torna da te. Inversion of Control, alla lettera.',
+    kind: 'boomerang',
+    icon: 'spring',
+    sprite: 'spring_spin',
+    scale: 1.9,
+    maxLevel: 10,
+    base: { damage: 16, cooldown: 1.5, count: 1, area: 1, speed: 24, pierce: 0, duration: 1, range: 14, knockback: 1 },
+    upgrades: [
+      { stat: 'damage', amount: 6, mode: 'add', label: 'Danno' },
+      { stat: 'count', amount: 1, mode: 'add', label: 'Dischi', int: true },
+      { stat: 'range', amount: 0.15, mode: 'mul', label: 'Gittata' },
+      { stat: 'cooldown', amount: -0.1, mode: 'mul', label: 'Cooldown' },
+      { stat: 'area', amount: 0.15, mode: 'mul', label: 'Dimensione' },
+    ],
+  },
+  {
+    id: 'mongo',
+    name: 'Foglia di MongoDB',
+    description: 'Una foglia che al primo impatto si divide in shard e colpisce chi sta intorno. Scala orizzontalmente.',
+    kind: 'split',
+    icon: 'mongo',
+    sprite: 'mongo', // in volo; gli shard sono mongo_l e mongo_r, poi mongo_stem e mongo_burst
+    scale: 1.6,
+    maxLevel: 10,
+    base: { damage: 20, cooldown: 1.1, count: 1, area: 1, speed: 18, pierce: 2, duration: 1.5, range: 26, knockback: 0.6 },
+    upgrades: [
+      { stat: 'damage', amount: 5, mode: 'add', label: 'Danno' },
+      { stat: 'pierce', amount: 1, mode: 'add', label: 'Shard', int: true },
+      { stat: 'count', amount: 1, mode: 'add', label: 'Foglie', int: true },
+      { stat: 'cooldown', amount: -0.1, mode: 'mul', label: 'Cooldown' },
+    ],
+  },
+  {
+    id: 'hexa',
+    name: 'Sciame Esagonale',
+    description: 'Un alveare ti segue: gli esagoni si staccano, inseguono i nemici ed esplodono, poi ricrescono al loro posto.',
+    kind: 'swarm',
+    icon: 'hexa',
+    sprite: 'hexa', // alveare: celle hexa_c0…hexa_c7, in volo hexa_fly, esplosione hexa_burst
+    maxLevel: 10,
+    base: { damage: 14, cooldown: 1.2, count: 2, area: 1, speed: 16, pierce: 0, duration: 0.8, range: 24, knockback: 0.5 },
+    upgrades: [
+      { stat: 'damage', amount: 4, mode: 'add', label: 'Danno' },
+      { stat: 'count', amount: 1, mode: 'add', label: 'Esagoni', int: true },
+      { stat: 'cooldown', amount: -0.1, mode: 'mul', label: 'Cooldown' },
+      { stat: 'area', amount: 0.15, mode: 'mul', label: 'Esplosione' },
+      { stat: 'speed', amount: 0.15, mode: 'mul', label: 'Velocità' },
+    ],
+  },
 ];
 
 export const WEAPONS: Record<string, WeaponDef> = Object.fromEntries(list.map((w) => [w.id, w]));

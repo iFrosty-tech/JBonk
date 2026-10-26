@@ -1,16 +1,17 @@
 import * as THREE from 'three';
 import { INK, type G, type SpriteDef, circ, ell, line, makeCanvas, path, poly, rr, txt } from './draw';
-import { LOGO_SPRITES, loadLogoImages } from './logos';
+import { LOGO_SPRITES, loadLogoImages } from './logos/index';
 
 // Tutti gli sprite del gioco sono disegnati via codice su un unico canvas (texture atlas).
 // Stile "sagoma di cartone": forma piena + bordo bianco + filo scuro, come le standee da ufficio.
 // Sostituire uno sprite = cambiare la sua funzione di disegno (o, più avanti, caricare un PNG).
 // Gli sprite con `frames: n` sono animati: ogni fotogramma ha la sua cella (vedi Atlas.anim).
-// I loghi di tecnologie e clienti, con le loro animazioni, sono in logos.ts.
+// I loghi di tecnologie, clienti e premi, con le loro animazioni, sono in logos/ (un file per logo).
 
 const CELL = 128;
-const SIZE = 2048;
-const COLS = SIZE / CELL;
+const WIDTH = 2048;
+const COLS = WIDTH / CELL;
+const MAX_ROWS = 32; // altezza massima 4096 px: la supportano tutte le GPU con WebGL 2
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
 export interface Frame {
@@ -733,6 +734,7 @@ export class Atlas {
   private frames = new Map<string, Frame>();
   private anims = new Map<string, Frame[]>();
   private dataUrl = '';
+  private readonly rows: number;
 
   /** Carica le immagini dei loghi e poi disegna l'atlas. */
   static async create(): Promise<Atlas> {
@@ -741,23 +743,32 @@ export class Atlas {
   }
 
   private constructor() {
-    this.canvas = makeCanvas(SIZE, SIZE);
-    const g = this.canvas.getContext('2d')!;
     // ogni fotogramma occupa una cella; impaccamento a scaffali, prima gli sprite alti
     const all = [...sprites, ...LOGO_SPRITES];
     const order = all
-      .flatMap((s) => Array.from({ length: s.frames ?? 1 }, (_, i) => ({ s, i })))
+      .flatMap((s) => Array.from({ length: s.frames ?? 1 }, (_, i) => ({ s, i, cx: 0, cy: 0 })))
       .sort((a, b) => b.s.ch - a.s.ch || b.s.cw - a.s.cw);
     let cx = 0;
     let cy = 0;
     let rowH = 0;
-    for (const { s, i } of order) {
-      if (cx + s.cw > COLS) {
+    for (const o of order) {
+      if (cx + o.s.cw > COLS) {
         cx = 0;
         cy += rowH;
         rowH = 0;
       }
-      if (cy + s.ch > COLS) throw new Error(`Atlas pieno: non c'è spazio per ${s.id} (aumentare SIZE)`);
+      if (cy + o.s.ch > MAX_ROWS) throw new Error(`Atlas pieno: non c'è spazio per ${o.s.id}`);
+      o.cx = cx;
+      o.cy = cy;
+      cx += o.s.cw;
+      rowH = Math.max(rowH, o.s.ch);
+    }
+    // l'altezza cresce con il numero di sprite, a passi di due righe
+    this.rows = Math.ceil((cy + rowH) / 2) * 2;
+    const H = this.rows * CELL;
+    this.canvas = makeCanvas(WIDTH, H);
+    const g = this.canvas.getContext('2d')!;
+    for (const { s, i, cx, cy } of order) {
       const w = s.cw * CELL;
       const h = s.ch * CELL;
       const tmp = makeCanvas(w, h);
@@ -777,10 +788,10 @@ export class Atlas {
         g.drawImage(tmp, px, py);
       }
       const f: Frame = {
-        u0: px / SIZE,
-        u1: (px + w) / SIZE,
-        v1: 1 - py / SIZE,
-        v0: 1 - (py + h) / SIZE,
+        u0: px / WIDTH,
+        u1: (px + w) / WIDTH,
+        v1: 1 - py / H,
+        v0: 1 - (py + h) / H,
         aspect: w / h,
         cx,
         cy,
@@ -791,8 +802,6 @@ export class Atlas {
       let list = this.anims.get(s.id);
       if (!list) this.anims.set(s.id, (list = []));
       list[i] = f;
-      cx += s.cw;
-      rowH = Math.max(rowH, s.ch);
     }
     this.texture = new THREE.CanvasTexture(this.canvas);
     this.texture.colorSpace = THREE.SRGBColorSpace;
@@ -821,7 +830,7 @@ export class Atlas {
     const unit = px / Math.max(f.cw, f.ch);
     return [
       `background-image:url(${this.dataUrl})`,
-      `background-size:${COLS * unit}px ${COLS * unit}px`,
+      `background-size:${COLS * unit}px ${this.rows * unit}px`,
       `background-position:-${f.cx * unit}px -${f.cy * unit}px`,
       `width:${f.cw * unit}px`,
       `height:${f.ch * unit}px`,

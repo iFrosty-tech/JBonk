@@ -750,6 +750,12 @@ button:focus-visible,
   font-size: 22px;
   font-variant-numeric: tabular-nums;
 }
+.trophies {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: -6px 0;
+}
 .dmg {
   width: 100%;
   border-collapse: collapse;

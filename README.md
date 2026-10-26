@@ -24,12 +24,12 @@ npm run artifact   # build + artifact/ (pagina + game.js pronti da pubblicare su
 | Rotella | Zoom |
 | Spazio | Salto (si scavalcano i nemici bassi) |
 | Shift | Scatto con invulnerabilità |
-| E | Interagire (forzieri, sala riunioni, ascensore) |
+| E | Interagire (forzieri, sala riunioni, totem NGH, JOscar, ascensore) |
 | 1 / 2 / 3 | Scegliere una carta |
 | Esc / P | Pausa |
 | M | Audio on/off |
 
-Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti, `T` +1 ora, `O` +100 €, `N` nuova arma (prima le ultime aggiunte), `C` carta Soldo.
+Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti, `T` +1 ora, `O` +100 €, `N` nuova arma (prima le ultime aggiunte), `C` carta Soldo, `F` onda del radar NGH, `J` statuetta JOscar.
 
 ## Il loop di gioco
 
@@ -39,8 +39,9 @@ Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti
 - **Macchinette del caffè** (santuari): restandoci vicino si ottiene un bonus permanente, a scelta tra 3 bevande.
 - **Presidi GPI** (roll-up "The Healthcare Partner"): restandoci vicino si recuperano HP, fino a esaurire la scorta del presidio.
 - **Carte Soldo**: le lasciano i guardiani, il boss e, raramente, i nemici normali. Raccolte, ricaricano il budget (buoni pasto).
+- **Totem NGH** (eliminacode NextGenerationHIS, 2 per progetto): si usano una volta. L'onda del radar mette in "lista d'attesa" tutti i nemici che raggiunge: fermi e innocui per 6 secondi (il boss per 2). Cancella anche i proiettili dei boss.
 - **Sala riunioni**: convoca il boss in anticipo. Alle 18:00 arriva comunque, e scatta lo straordinario.
-- **Boss sconfitto → ascensore** verso il progetto successivo. Si vince consegnando 3 progetti.
+- **Boss sconfitto → JOscar e ascensore.** Accanto all'ascensore compare la statuetta del JOscar: ritirandola parte la premiazione e si sceglie un premio (carte di rarità almeno Alta). La schermata finale conta i JOscar vinti. L'ascensore porta al progetto successivo; si vince consegnando 3 progetti.
 
 ## Architettura
 
@@ -53,17 +54,17 @@ src/
     passives.ts      passivi ("tomi") e bevande della macchinetta
     characters.ts    personaggi giocabili, compagno, arma iniziale, bonus
     tuning.ts        bilanciamento globale (durata giornata, spawn, curva XP, rarità)
-  assets/            immagini originali dei loghi raster (logo Java scomposto in parti, carta Soldo)
+  assets/            immagini dei loghi raster, già ritagliate (Java e MongoDB scomposti in parti, Soldo, Spring, scritta NGH, JOscar)
   render/
     atlas.ts         sprite disegnati via codice in un'unica texture (stile sagoma di cartone), anche animati
-    logos.ts         sprite animati dai loghi di tecnologie e clienti (Claude, Angular, Java, GPI, Soldo)
+    logos/           sprite animati dai loghi di tecnologie, clienti e premi: un file per logo, elenco in index.ts
     draw.ts          primitive di disegno condivise
     billboards.ts    TUTTI gli sprite in 1 draw call (quad istanziati rivolti alla camera) + ombre
     world.ts         terreno a colline con piastrelle, muri, luci, collisioni con gli arredi
     props.ts         arredi low-poly fatti con primitive (scrivanie, rack, colonne…)
   game/
     game.ts          stato della partita e loop: player, nemici, director delle ondate, boss, pickup, interattivi
-    weapons.ts       8 pattern d'arma: projectile, orbit, aura, radial, strike, chain, minion, lob
+    weapons.ts       11 pattern d'arma: projectile, orbit, aura, radial, strike, chain, minion, lob, boomerang, split, swarm
     cards.ts         generazione carte (level-up, forziere, caffè) e rarità
     camera.ts, input.ts, spatial.ts (griglia per le collisioni), audio.ts (suoni sintetizzati)
   ui/                HUD, minimappa, numeri di danno, schermate (titolo, carte, pausa, fine partita)
@@ -73,7 +74,7 @@ Scelte tecniche:
 - **Three.js + TypeScript + Vite**, senza motore fisico: collisioni a cerchi su una griglia spaziale, terreno ad altezza analitica.
 - **2.5D**: mondo 3D low-poly, personaggi come sprite 2D "in piedi" (billboard cilindrici) con ombra a disco.
 - **Prestazioni**: la logica con 280 nemici e 5 armi costa circa **0,7 ms per frame** (misurato). Tutti gli sprite stanno in una sola draw call.
-- **Niente asset esterni**: sprite su canvas, arredi da primitive, effetti sonori in WebAudio. Le due immagini dei loghi (Java, Soldo) sono incluse nel bundle come data URL. Il bundle è un solo file JS (~715 KB, ~225 KB gzip).
+- **Niente asset esterni**: sprite su canvas, arredi da primitive, effetti sonori in WebAudio. Le immagini dei loghi raster sono incluse nel bundle come data URL. Il bundle è un solo file JS (~810 KB, ~285 KB gzip).
 
 ## Come aggiungere un progetto (bioma)
 
@@ -85,22 +86,27 @@ Scelte tecniche:
    - `enemies`: quali nemici, da che secondo compaiono e con che peso;
    - `elite`, `boss`, `swarm`, `swarmName`.
 2. Se servono nemici o boss nuovi, aggiungili in `src/config/enemies.ts`. Per il boss compila anche `boss: { shotEvery, shots, shotSpeed, chargeEvery, projectile, quote }`.
-3. Per gli sprite nuovi aggiungi una voce in `sprites` dentro `render/atlas.ts` (una funzione che disegna su canvas). Nella versione finale si sostituisce con il caricamento di PNG/spritesheet: il resto del codice usa solo l'id dello sprite.
+3. Per gli sprite nuovi aggiungi una voce in `sprites` dentro `render/atlas.ts` (una funzione che disegna su canvas). Nella versione finale si sostituisce con il caricamento di PNG/spritesheet: il resto del codice usa solo l'id dello sprite. L'atlas cresce in altezza da solo (fino a 2048×4096).
 
 ## Sprite animati e loghi
 
 - Uno sprite con `frames: n` viene disegnato `n` volte: la funzione di disegno riceve il numero del fotogramma (`i`, da 0 a `n-1`) e ogni fotogramma occupa una cella dell'atlas. Nel gioco `game.anim(id)` restituisce tutti i fotogrammi, `game.frame(id)` il primo (usato anche per le icone).
-- I loghi sono in `render/logos.ts`:
+- I loghi sono in `render/logos/`, un file per logo:
   - **Claude Code**: la mascotte in pixel art, con camminata (4 fotogrammi), riposo con battito di ciglia, attacco a salto e il simbolo di Claude come effetto dei colpi. È l'arma *Claude Code*: aiutanti che corrono dai nemici (i "subagenti" arrivano salendo di livello).
   - **Angular**: lo scudo ricostruito dai path SVG ufficiali, che ruota su se stesso in 16 fotogrammi (spessore del bordo, retro con le cinghie, riflesso). È l'arma *Scudo Angular*: scudi in orbita che bloccano anche i proiettili dei boss.
   - **Java**: dall'immagine originale, scomposta in parti (`assets/java-parts.webp`). Il vapore ondeggia riga per riga, gli anelli della tazza rimbalzano in sequenza. È l'arma *Tazza di Java*: tazze lanciate a parabola che lasciano una pozza di caffè ustionante, con il vapore del logo che sale.
   - **GPI**: il logo ricostruito in vettoriale su un roll-up, con il puntino della *i* che saltella, il tracciato ECG e il cuore che batte. È il *Presidio GPI* che cura.
   - **Soldo**: la carta originale (`assets/soldo-card.webp`) che gira in prospettiva, con il retro disegnato e un riflesso. È la *Carta Soldo* che ricarica il budget.
-- Per aggiungere un logo raster: metti l'immagine in `src/assets`, aggiungila a `loadLogoImages()` in `logos.ts` e disegnala con `images.get(...)`. Per i loghi vettoriali basta ridisegnarli su canvas (con `Path2D` si possono usare direttamente i path SVG).
+  - **Spring**: il logo originale (`assets/spring.webp`) su un disco visto in prospettiva che gira, con lo spessore del bordo e un riflesso fisso. È l'arma *Spring Boot*: un frisbee che va, attraversa i nemici e torna.
+  - **MongoDB**: la foglia originale divisa lungo la nervatura in due metà e gambo (`assets/mongo-leaf.webp`). In volo si ribalta e mostra il rovescio più chiaro; all'impatto le metà si separano. È l'arma *Foglia di MongoDB*: le metà diventano shard che colpiscono i nemici vicini.
+  - **Logo a esagoni**: gli 8 esagoni misurati sull'originale e ridisegnati, ognuno anche come sprite a sé. È l'arma *Sciame Esagonale*: un alveare con la forma del logo segue il giocatore, gli esagoni si staccano (prismi che si ribaltano in volo), inseguono i nemici, esplodono e ricrescono al loro posto.
+  - **NGH · NextGenerationHIS**: il simbolo del logo ridisegnato in vettoriale (lo spicchio gira come il fascio di un radar, con la scia e i "bip") e la scritta originale (`assets/ngh-text.webp`), su un totem eliminacode che stampa i numeri. È il *Totem NGH*: i nemici in attesa diventano verde acqua e tengono in mano il loro biglietto.
+  - **JOscar**: la statuetta originale (`assets/joscar.webp`, oro e base separati) con un riflesso che scorre solo sull'oro e la targhetta "JOSCAR" sulla base. Intorno: fasci di luce da palco, scintille e coriandoli per la premiazione.
+- Per aggiungere un logo: crea un file in `render/logos/` che esporta i suoi `SpriteDef` e aggiungilo all'elenco in `logos/index.ts`. Se è raster, metti l'immagine in `src/assets` e registrala in `logos/images.ts`, poi disegnala con `images.get(...)`. Per i loghi vettoriali basta ridisegnarli su canvas (con `Path2D` si possono usare direttamente i path SVG).
 
 ## Come aggiungere un'arma o un passivo
 
-- **Arma**: in `config/weapons.ts` scegli un `kind` tra `projectile | orbit | aura | radial | strike | chain | minion | lob`, poi imposta statistiche base e upgrade. Un comportamento nuovo va aggiunto in `game/weapons.ts`. `minion` e `lob` cercano sprite con suffissi fissi (`_idle`, `_hit`, `_spark` / `_splash`, `_steam`).
+- **Arma**: in `config/weapons.ts` scegli un `kind` tra `projectile | orbit | aura | radial | strike | chain | minion | lob | boomerang | split | swarm`, poi imposta statistiche base e upgrade. Un comportamento nuovo va aggiunto in `game/weapons.ts`. Alcuni tipi cercano sprite con suffissi fissi: `minion` (`_idle`, `_hit`, `_spark`), `lob` (`_splash`, `_steam`), `split` (`_l`, `_r`, `_stem`, `_burst`; `pierce` è il numero di shard), `swarm` (celle `_c0`…, `_fly`, `_burst`, più la disposizione dell'alveare in `HIVES` dentro `logos/index.ts`).
 - **Passivo**: in `config/passives.ts` indica la statistica (`stat`), il valore per livello e il formato.
 
 ## Limiti noti del POC

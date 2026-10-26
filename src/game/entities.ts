@@ -37,6 +37,7 @@ export interface Enemy {
   face: number;
   phase: number;
   alive: boolean;
+  frozen: number; // secondi rimasti "in lista d'attesa" (totem NGH)
   elite: boolean;
   boss: boolean;
   // solo boss
@@ -60,9 +61,11 @@ export interface Projectile {
   radius: number;
   life: number;
   frame: Frame;
+  anim: Frame[] | null; // se presente, lo sprite gira in loop
   size: number;
   rot: number;
   spin: number;
+  split: number; // al primo impatto si divide in tanti frammenti (arma 'split')
   hits: number[];
   weapon: string;
   knock: number;
@@ -87,7 +90,7 @@ export interface Pickup {
   t: number;
 }
 
-export type InteractKind = 'chest' | 'shrine' | 'altar' | 'portal' | 'clinic';
+export type InteractKind = 'chest' | 'shrine' | 'altar' | 'portal' | 'clinic' | 'ngh' | 'joscar';
 
 export interface Interactable {
   kind: InteractKind;
@@ -102,6 +105,7 @@ export interface Interactable {
 export interface Fx {
   frame: Frame;
   anim: Frame[] | null; // se presente, l'animazione dura quanto l'effetto
+  fps: number; // se > 0, l'animazione gira in loop a questa velocità
   x: number;
   y: number;
   z: number;

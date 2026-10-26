@@ -167,6 +167,12 @@ export class App {
       }
     }
     if (e.code === 'KeyC') g.spawnPickup('card', 15, g.player.x + g.rig.forward.x * 4, g.player.z + g.rig.forward.z * 4);
+    if (e.code === 'KeyF') g.startWave(g.player.x, g.player.z);
+    if (e.code === 'KeyJ') {
+      const x = g.player.x + g.rig.forward.x * 5;
+      const z = g.player.z + g.rig.forward.z * 5;
+      g.interactables.push({ kind: 'joscar', x, z, y: g.world.height(x, z), used: false, charge: 0, free: true });
+    }
   };
 
   private resize = () => {

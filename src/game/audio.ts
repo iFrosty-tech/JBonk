@@ -1,6 +1,22 @@
 // Effetti sonori sintetizzati con WebAudio: nessun file audio da caricare.
 
-type Sfx = 'hit' | 'pickup' | 'level' | 'hurt' | 'boom' | 'boss' | 'coin' | 'open' | 'shoot' | 'block' | 'splash';
+type Sfx =
+  | 'hit'
+  | 'pickup'
+  | 'level'
+  | 'hurt'
+  | 'boom'
+  | 'boss'
+  | 'coin'
+  | 'open'
+  | 'shoot'
+  | 'block'
+  | 'splash'
+  | 'swish'
+  | 'split'
+  | 'pop'
+  | 'ping'
+  | 'fanfare';
 
 export class Audio {
   private ctx: AudioContext | null = null;
@@ -33,7 +49,7 @@ export class Audio {
     const ctx = this.ctx;
     if (!ctx || !this.master || this.muted) return;
     const now = ctx.currentTime;
-    const minGap = s === 'hit' ? 0.05 : s === 'pickup' ? 0.03 : 0.02;
+    const minGap = s === 'hit' || s === 'pop' ? 0.05 : s === 'pickup' ? 0.03 : 0.02;
     if (now - (this.last.get(s) ?? -1) < minGap) return;
     this.last.set(s, now);
     switch (s) {
@@ -69,6 +85,25 @@ export class Audio {
       case 'splash':
         this.noise(0.16, 0.14);
         this.tone(340, 140, 0.14, 'sine', 0.14);
+        break;
+      case 'swish': // disco lanciato
+        this.noise(0.16, 0.06);
+        this.tone(420, 1100, 0.16, 'triangle', 0.05);
+        break;
+      case 'split': // la foglia si divide
+        this.tone(1500, 2300, 0.04, 'square', 0.05);
+        this.tone(1900, 2700, 0.05, 'square', 0.04, 0.045);
+        break;
+      case 'pop': // esagono che esplode
+        this.tone(760, 180, 0.08, 'square', 0.07);
+        break;
+      case 'ping': // il radar del totem NGH, con l'eco
+        this.tone(1760, 1690, 0.5, 'sine', 0.2);
+        this.tone(1760, 1690, 0.4, 'sine', 0.07, 0.28);
+        break;
+      case 'fanfare': // premiazione JOscar
+        [523, 659, 784].forEach((f, i) => this.tone(f, f, 0.11, 'square', 0.1, i * 0.1));
+        [523, 659, 784, 1047].forEach((f) => this.tone(f, f * 1.003, 0.7, 'triangle', 0.12, 0.32));
         break;
       case 'boss':
         [110, 104, 98].forEach((f, i) => this.tone(f, f, 0.35, 'sawtooth', 0.2, i * 0.3));

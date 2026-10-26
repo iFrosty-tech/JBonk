@@ -29,6 +29,10 @@ export const TUNING = {
   clinicStock: 80, // HP che un presidio può erogare
   clinicRate: 16, // HP al secondo
   clinicRadius: 3.6,
+  nghCount: 2, // totem NGH per progetto
+  nghFreeze: 6, // secondi "in lista d'attesa" (boss: un terzo)
+  nghRadius: 60, // fin dove arriva l'onda del radar
+  nghWaveSpeed: 45,
   stagesToWin: 3,
   rarity: {
     names: ['Bassa', 'Media', 'Alta', 'Bloccante'],

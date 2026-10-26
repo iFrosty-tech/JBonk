@@ -268,10 +268,10 @@ export class Hud {
     }
     for (const it of g.interactables) {
       if (it.used && it.kind !== 'portal') continue;
-      const important = it.kind === 'altar' || it.kind === 'portal';
+      const important = it.kind === 'altar' || it.kind === 'portal' || it.kind === 'joscar';
       const q = proj(it.x, it.z, important);
       if (!q) continue;
-      const color = it.kind === 'chest' ? '#ffd23f' : it.kind === 'shrine' ? '#ff8c5a' : it.kind === 'altar' ? '#b48cff' : it.kind === 'clinic' ? '#ee7d01' : '#5dfd8a';
+      const color = { chest: '#ffd23f', shrine: '#ff8c5a', altar: '#b48cff', clinic: '#ee7d01', ngh: '#81cbd0', joscar: '#f5c542', portal: '#5dfd8a' }[it.kind];
       ctx.fillStyle = color;
       ctx.strokeStyle = '#10131c';
       ctx.lineWidth = 3;
@@ -285,9 +285,24 @@ export class Hud {
         const pts = [-a, -b, a, -b, a, -a, b, -a, b, a, a, a, a, b, -a, b, -a, a, -b, a, -b, -a, -a, -a];
         for (let i = 0; i < pts.length; i += 2) ctx.lineTo(x + pts[i], y + pts[i + 1]);
         ctx.closePath();
+      } else if (it.kind === 'joscar') {
+        // stella dorata della premiazione
+        for (let i = 0; i < 10; i++) {
+          const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+          const r = i % 2 ? 5 : 12;
+          ctx.lineTo(q[0] + Math.cos(a) * r, q[1] + Math.sin(a) * r);
+        }
+        ctx.closePath();
       } else ctx.arc(q[0], q[1], important ? 11 : 8, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+      if (it.kind === 'ngh') {
+        // il punto arancione del logo NGH
+        ctx.fillStyle = '#ee7f01';
+        ctx.beginPath();
+        ctx.arc(q[0], q[1], 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     for (const e of g.enemies) {
       if (!e.boss && !e.elite) continue;

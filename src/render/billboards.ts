@@ -10,7 +10,7 @@ const vertex = /* glsl */ `
   attribute vec3 iPos;
   attribute vec2 iSize;
   attribute vec4 iUv;
-  attribute vec4 iParams; // flip, flash, alpha, rotazione
+  attribute vec4 iParams; // flip, flash (negativo = tinta "in attesa"), alpha, rotazione
   varying vec2 vUv;
   varying float vFlash;
   varying float vAlpha;
@@ -44,7 +44,10 @@ const fragment = /* glsl */ `
   void main() {
     vec4 t = texture2D(map, vUv);
     if (t.a < alphaCut) discard;
-    vec3 col = mix(t.rgb, vec3(1.0, 0.95, 0.9), vFlash);
+    vec3 col = mix(t.rgb, vec3(1.0, 0.95, 0.9), max(vFlash, 0.0));
+    // flash negativo: desaturato e verde acqua, come i nemici messi in lista d'attesa dal totem NGH
+    float grey = dot(t.rgb, vec3(0.3, 0.59, 0.11));
+    col = mix(col, grey * vec3(0.6, 0.92, 0.98) + vec3(0.02, 0.1, 0.12), max(-vFlash, 0.0));
     float fog = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
     col = mix(col, fogColor, clamp(fog, 0.0, 1.0));
     gl_FragColor = vec4(col, t.a * vAlpha);

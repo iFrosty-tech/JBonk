@@ -1,6 +1,7 @@
 // Primitive di disegno su canvas condivise dagli sprite (atlas.ts e logos.ts).
 
 export const INK = '#1d2333';
+export const TAU = Math.PI * 2;
 
 export type G = CanvasRenderingContext2D;
 /** Disegna lo sprite in una cella w×h. Per gli sprite animati `i` è il fotogramma (0..n-1). */

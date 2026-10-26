@@ -12,10 +12,10 @@ import { World } from '../render/world';
 import type { Audio } from './audio';
 import { CameraRig } from './camera';
 import { shrineCards, upgradeCards } from './cards';
-import type { ChoiceRequest, DamageNumber, Enemy, Fx, Interactable, Pickup, PickupKind, Player, Projectile } from './entities';
+import type { ChoiceRequest, DamageNumber, Enemy, Fx, InteractKind, Interactable, Pickup, PickupKind, Player, Projectile } from './entities';
 import type { Input } from './input';
 import { SpatialHash } from './spatial';
-import { WeaponInstance, drawWeapon, updateWeapon } from './weapons';
+import { WeaponInstance, drawWeapon, splitProjectile, updateWeapon } from './weapons';
 
 export type Mode = 'play' | 'paused' | 'choice' | 'over';
 
@@ -26,6 +26,7 @@ export interface RunResult {
   level: number;
   gold: number;
   stages: number;
+  joscars: number;
   biome: BiomeDef;
   character: CharacterDef;
   damage: { name: string; icon: string; value: number }[];
@@ -50,6 +51,7 @@ interface FxOpts {
   gravity?: number;
   alpha?: number;
   anim?: boolean; // riproduce tutti i fotogrammi dello sprite nella durata dell'effetto
+  fps?: number; // con `anim`: i fotogrammi girano in loop a questa velocità invece di scorrere una volta
 }
 
 const tmpPt = { x: 0, z: 0 };
@@ -84,6 +86,8 @@ export class Game {
   fxs: Fx[] = [];
   interactables: Interactable[] = [];
   numbers: DamageNumber[] = [];
+  /** Onde del radar dei totem NGH: mettono "in lista d'attesa" i nemici che raggiungono. */
+  waves: { x: number; z: number; r: number; hit: Set<number> }[] = [];
 
   kills = 0;
   gold = 0;
@@ -93,6 +97,7 @@ export class Game {
   boss: Enemy | null = null;
   bossSpawned = false;
   chestsOpened = 0;
+  joscars = 0;
   prompt: string | null = null;
   hurtFlash = 0;
   god = false;
@@ -104,6 +109,7 @@ export class Game {
   private eliteT = 0;
   private swarmsDone = new Set<number>();
   private choiceQueue: (() => ChoiceRequest)[] = [];
+  private delayedChoices: { t: number; make: () => ChoiceRequest }[] = [];
   private hitFxBudget = 0;
   private readonly frames = new Map<string, Frame>();
   private readonly anims = new Map<string, Frame[]>();
@@ -143,7 +149,7 @@ export class Game {
     if (this.world) this.world.dispose(this.scene);
     this.biome = BIOMES[this.biomeIdx % BIOMES.length];
     const seed = (Math.random() * 1e9) | 0;
-    const spotCount = 1 + TUNING.shrineCount + TUNING.clinicCount + TUNING.chestCount;
+    const spotCount = 1 + TUNING.shrineCount + TUNING.clinicCount + TUNING.nghCount + TUNING.chestCount;
     this.world = new World(this.scene, this.biome, TUNING.arenaHalf, seed, spotCount);
     this.scene.add(this.world.group);
     this.enemies = [];
@@ -152,6 +158,7 @@ export class Game {
     this.pickups = [];
     this.fxs = [];
     this.numbers = [];
+    this.waves = [];
     this.interactables = [];
     this.boss = null;
     this.bossSpawned = false;
@@ -160,10 +167,13 @@ export class Game {
     this.eliteT = 0;
     this.swarmsDone.clear();
 
-    // la sala riunioni è il punto più lontano dal centro, poi macchinette e presidi GPI
+    // la sala riunioni è il punto più lontano dal centro, poi macchinette, presidi GPI e totem NGH
     const spots = [...this.world.spots].sort((a, b) => Math.hypot(b.x, b.z) - Math.hypot(a.x, a.z));
+    const order: InteractKind[] = ['altar'];
+    for (const [kind, n] of [['shrine', TUNING.shrineCount], ['clinic', TUNING.clinicCount], ['ngh', TUNING.nghCount]] as const)
+      for (let k = 0; k < n; k++) order.push(kind);
     spots.forEach((s, i) => {
-      const kind = i === 0 ? 'altar' : i <= TUNING.shrineCount ? 'shrine' : i <= TUNING.shrineCount + TUNING.clinicCount ? 'clinic' : 'chest';
+      const kind = order[i] ?? 'chest';
       this.interactables.push({ kind, x: s.x, z: s.z, y: this.world.height(s.x, s.z), used: false, charge: 0, free: false });
     });
 
@@ -307,26 +317,30 @@ export class Game {
 
   // ---------------------------------------------------------------- creazione entità
 
-  spawnProjectile(w: WeaponInstance, x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number, spin: number) {
-    this.projectiles.push({
+  spawnProjectile(w: WeaponInstance, x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number, spin: number): Projectile {
+    const pr: Projectile = {
       x, y, z, vx, vy, vz, size, life, spin,
       damage: w.stats.damage,
       pierce: w.stats.pierce,
       radius: size * 0.4,
       frame: this.frame(w.def.sprite),
+      anim: null,
       rot: 0,
+      split: 0,
       hits: [],
       weapon: w.def.id,
       knock: w.stats.knockback,
       alive: true,
-    });
+    };
+    this.projectiles.push(pr);
+    return pr;
   }
 
   spawnFx(id: string, x: number, y: number, z: number, o: FxOpts = {}) {
     if (this.fxs.length > 900) return;
     const life = o.life ?? 0.4;
     this.fxs.push({
-      frame: this.frame(id), anim: o.anim ? this.anim(id) : null, x, y, z,
+      frame: this.frame(id), anim: o.anim ? this.anim(id) : null, fps: o.fps ?? 0, x, y, z,
       vx: o.vx ?? 0, vy: o.vy ?? 0, vz: o.vz ?? 0,
       size0: o.size0 ?? 1, size1: o.size1 ?? o.size0 ?? 1,
       life, max: life, rot: o.rot ?? 0, spin: o.spin ?? 0, gravity: o.gravity ?? 0, alpha: o.alpha ?? 1,
@@ -383,7 +397,7 @@ export class Game {
       x: tmpPt.x, z: tmpPt.z, y: this.world.height(tmpPt.x, tmpPt.z) + (def.hover ?? 0),
       kx: 0, kz: 0, hp: def.hp * hpMul, maxHp: def.hp * hpMul,
       speed: def.speed * (0.9 + Math.random() * 0.2), damage: def.damage * dmgMul,
-      radius: def.radius, height: def.height, flash: 0, face: 1, phase: Math.random() * 10, alive: true,
+      radius: def.radius, height: def.height, flash: 0, face: 1, phase: Math.random() * 10, alive: true, frozen: 0,
       elite: kind === 'elite', boss: kind === 'boss',
       shotT: def.boss ? def.boss.shotEvery : 0, chargeT: def.boss ? def.boss.chargeEvery : 0,
       telegraph: 0, charging: 0, cx: 0, cz: 0,
@@ -461,11 +475,18 @@ export class Game {
       tmpPt.x = e.x;
       tmpPt.z = e.z;
       this.world.resolve(tmpPt, 2);
-      this.interactables.push({ kind: 'portal', x: tmpPt.x, z: tmpPt.z, y: this.world.height(tmpPt.x, tmpPt.z), used: false, charge: 0, free: true });
+      const px = tmpPt.x;
+      const pz = tmpPt.z;
+      this.interactables.push({ kind: 'portal', x: px, z: pz, y: this.world.height(px, pz), used: false, charge: 0, free: true });
+      // accanto all'ascensore, il JOscar per il miglior contributo al progetto
+      tmpPt.x = px + 5.5;
+      tmpPt.z = pz;
+      this.world.resolve(tmpPt, 1.5);
+      this.interactables.push({ kind: 'joscar', x: tmpPt.x, z: tmpPt.z, y: this.world.height(tmpPt.x, tmpPt.z), used: false, charge: 0, free: true });
       for (let i = 0; i < 4; i++) this.spawnPickup('gold', 10, e.x, e.z);
       for (let i = 0; i < 2; i++) this.spawnPickup('card', 20, e.x + (i ? 2 : -2), e.z);
       const last = this.stagesCleared + 1 >= TUNING.stagesToWin;
-      this.hooks.banner(last ? 'Progetto consegnato! Prendi l\'ascensore per chiudere.' : 'Boss sconfitto! L\'ascensore porta al prossimo progetto.', 'good');
+      this.hooks.banner(last ? 'Progetto consegnato! Ritira il JOscar e prendi l\'ascensore per chiudere.' : 'Boss sconfitto! Ritira il JOscar: l\'ascensore porta al prossimo progetto.', 'good');
     }
   }
 
@@ -492,6 +513,7 @@ export class Game {
       level: this.level,
       gold: this.gold,
       stages: this.stagesCleared,
+      joscars: this.joscars,
       biome: this.biome,
       character: this.character,
       damage: this.weapons
@@ -530,7 +552,10 @@ export class Game {
     this.updateHostile(dt);
     this.updatePickups(dt);
     this.updateInteractables(dt);
+    this.updateWaves(dt);
     this.updateFx(dt);
+    for (const d of this.delayedChoices) if ((d.t -= dt) <= 0) this.queueChoice(d.make);
+    this.delayedChoices = this.delayedChoices.filter((d) => d.t > 0);
 
     this.player.hp = Math.min(this.stats.maxHp, this.player.hp + this.stats.regen * dt);
     this.hurtFlash = Math.max(0, this.hurtFlash - dt * 3);
@@ -716,6 +741,10 @@ export class Game {
         const sp = Math.hypot(pr.vx, pr.vz) || 1;
         const w = this.weapons.find((x) => x.def.id === pr.weapon) ?? null;
         this.damageEnemy(e, pr.damage, w, (pr.vx / sp) * pr.knock, (pr.vz / sp) * pr.knock);
+        if (pr.split > 0 && w) {
+          splitProjectile(this, w, pr, e);
+          break;
+        }
         if (pr.pierce-- <= 0) {
           pr.alive = false;
           break;
@@ -736,7 +765,13 @@ export class Game {
       let vx = (dx / d) * e.speed;
       let vz = (dz / d) * e.speed;
 
-      if (e.boss && e.def.boss) {
+      const frozen = e.frozen > 0;
+      if (frozen) {
+        // in lista d'attesa (totem NGH): fermo e innocuo
+        e.frozen -= dt;
+        vx = 0;
+        vz = 0;
+      } else if (e.boss && e.def.boss) {
         const b = e.def.boss;
         e.shotT -= dt;
         if (e.shotT <= 0) {
@@ -746,8 +781,8 @@ export class Game {
             const a = off + (i / b.shots) * Math.PI * 2;
             this.hostile.push({
               x: e.x, y: e.y + 1.6, z: e.z, vx: Math.cos(a) * b.shotSpeed, vy: 0, vz: Math.sin(a) * b.shotSpeed,
-              damage: e.damage * 0.6, pierce: 0, radius: 0.6, life: 4, frame: this.frame(b.projectile), size: 1.3,
-              rot: 0, spin: 4, hits: [], weapon: '', knock: 0, alive: true,
+              damage: e.damage * 0.6, pierce: 0, radius: 0.6, life: 4, frame: this.frame(b.projectile), anim: null, size: 1.3,
+              rot: 0, spin: 4, split: 0, hits: [], weapon: '', knock: 0, alive: true,
             });
           }
         }
@@ -804,11 +839,11 @@ export class Game {
       const side = vx * r.x + vz * r.z;
       if (Math.abs(side) > 0.3) e.face = side > 0 ? 1 : -1;
       e.flash = Math.max(0, e.flash - dt * 6);
-      e.phase += dt * e.speed * 1.6;
+      if (!frozen) e.phase += dt * e.speed * 1.6;
 
       // contatto col giocatore (saltando si evitano i nemici bassi)
       const reach = e.radius + TUNING.playerRadius;
-      if (d < reach && p.y < e.y + e.height * 0.75 && p.y + 1.6 > e.y) this.hurtPlayer(e.damage);
+      if (!frozen && d < reach && p.y < e.y + e.height * 0.75 && p.y + 1.6 > e.y) this.hurtPlayer(e.damage);
     }
   }
 
@@ -831,6 +866,35 @@ export class Game {
         h.alive = false;
       }
     }
+  }
+
+  /** Totem NGH: parte un'onda del radar dal punto (x, z). */
+  startWave(x: number, z: number) {
+    this.waves.push({ x, z, r: 0, hit: new Set() });
+  }
+
+  private updateWaves(dt: number) {
+    for (const w of this.waves) {
+      w.r += TUNING.nghWaveSpeed * dt;
+      const r2 = w.r * w.r;
+      for (const e of this.enemies) {
+        if (!e.alive || w.hit.has(e.id) || (e.x - w.x) ** 2 + (e.z - w.z) ** 2 > r2) continue;
+        w.hit.add(e.id);
+        e.frozen = TUNING.nghFreeze * (e.boss ? 1 / 3 : 1);
+        e.kx = 0;
+        e.kz = 0;
+        e.telegraph = 0;
+        e.charging = 0;
+        if (this.fxs.length < 700) this.spawnFx('ngh_ping', e.x, e.y + e.height * 0.5, e.z, { size0: 0.6, size1: e.height * 1.2 + 0.8, life: 0.45 });
+      }
+      // anche i proiettili dei boss si fermano: vengono cancellati
+      for (const h of this.hostile) {
+        if (!h.alive || (h.x - w.x) ** 2 + (h.z - w.z) ** 2 > r2) continue;
+        h.alive = false;
+        this.spawnFx('spark', h.x, h.y, h.z, { size0: 1.4, size1: 0.2, life: 0.2, rot: Math.random() * 3 });
+      }
+    }
+    if (this.waves.some((w) => w.r >= TUNING.nghRadius)) this.waves = this.waves.filter((w) => w.r < TUNING.nghRadius);
   }
 
   private updatePickups(dt: number) {
@@ -908,6 +972,10 @@ export class Game {
     for (const it of this.interactables) {
       if (it.used) continue;
       const d = Math.hypot(it.x - p.x, it.z - p.z);
+      if (it.kind === 'joscar' && Math.random() < dt * 5) {
+        // scintille intorno alla statuetta
+        this.spawnFx('sparkle', it.x + (Math.random() - 0.5) * 1.6, it.y + 0.6 + Math.random() * 3, it.z + (Math.random() - 0.5) * 1.6, { size0: 0.9, size1: 0, life: 0.55, rot: Math.random() });
+      }
       if (it.kind === 'shrine') {
         if (d < 3.4) {
           it.charge += dt;
@@ -938,6 +1006,8 @@ export class Game {
     if (best.kind === 'chest') this.prompt = cost ? `[E] Apri ordine d'acquisto — ${cost} €` : '[E] Apri ordine d\'acquisto — gratis';
     else if (best.kind === 'altar') this.prompt = this.bossSpawned ? 'Sala riunioni occupata' : `[E] Convoca la riunione: arriva ${ENEMIES[this.biome.boss].name}`;
     else if (best.kind === 'portal') this.prompt = '[E] Prendi l\'ascensore';
+    else if (best.kind === 'ngh') this.prompt = '[E] Totem NGH — prendi il numero: tutti in lista d\'attesa';
+    else if (best.kind === 'joscar') this.prompt = '[E] Ritira il JOscar';
     if (!this.input.hit('KeyE')) return;
     if (best.kind === 'chest') {
       if (this.gold < cost) {
@@ -953,6 +1023,49 @@ export class Game {
       best.used = true;
       this.spawnBoss();
     } else if (best.kind === 'portal') this.usePortal(best);
+    else if (best.kind === 'ngh') this.useNgh(best);
+    else if (best.kind === 'joscar') this.awardJOscar(best);
+  }
+
+  /** Totem NGH: stampa il numero e l'onda del radar mette tutti in lista d'attesa. */
+  private useNgh(it: Interactable) {
+    it.used = true;
+    this.startWave(it.x, it.z);
+    this.spawnFx('ngh_ticket', it.x, it.y + 3.3, it.z, { size0: 1.1, size1: 1.4, life: 1.4, vy: 3.2, gravity: 1.5, spin: 1.2 });
+    this.hooks.banner('NextGenerationHIS: triage completato, tutti in lista d\'attesa!', 'good');
+    this.audio.play('ping');
+    this.rig.shake = Math.max(this.rig.shake, 0.2);
+  }
+
+  /** Premiazione: la statuetta vola al giocatore tra i coriandoli, poi si sceglie il premio. */
+  private awardJOscar(it: Interactable) {
+    it.used = true;
+    this.joscars++;
+    const p = this.player;
+    const T = 0.7;
+    const y0 = it.y + 1.9;
+    const g = 14;
+    this.spawnFx('joscar', it.x, y0, it.z, {
+      size0: 3.8, size1: 1.3, life: T, vx: (p.x - it.x) / T, vy: (p.y + 2.4 - y0) / T + 0.5 * g * T, vz: (p.z - it.z) / T, gravity: g,
+    });
+    for (let i = 0; i < 44; i++) {
+      this.spawnFx('confetti', p.x + (Math.random() - 0.5) * 7, p.y + 4 + Math.random() * 3, p.z + (Math.random() - 0.5) * 7, {
+        size0: 1 + Math.random() * 0.6, life: 1.8 + Math.random(), vx: (Math.random() - 0.5) * 4, vy: 2 + Math.random() * 4,
+        vz: (Math.random() - 0.5) * 4, gravity: 5, rot: Math.random() * 6, spin: (Math.random() - 0.5) * 5, anim: true, fps: 9,
+      });
+    }
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      this.spawnFx('sparkle', p.x + Math.cos(a) * 1.6, p.y + 2.4, p.z + Math.sin(a) * 1.6, { size0: 1.4, size1: 0, life: 0.7, vx: Math.cos(a) * 4, vy: 2, vz: Math.sin(a) * 4 });
+    }
+    this.audio.play('fanfare');
+    const project = this.biome.project;
+    this.hooks.banner(`JOscar ${new Date().getFullYear()} a ${this.character.name}: miglior contributo a ${project}!`, 'good');
+    // la scelta arriva dopo la festa, così i coriandoli si vedono
+    this.delayedChoices.push({
+      t: 1.3,
+      make: () => ({ title: 'Premio JOscar', subtitle: `Miglior contributo a ${project}: scegli il premio`, cards: upgradeCards(this, 2), skipLabel: null }),
+    });
   }
 
   /** Presidio GPI: cura finché resti vicino, fino a esaurire la scorta. */
@@ -1028,12 +1141,20 @@ export class Game {
     solid.push(this.frame(this.character.companion), c.x, c.y, c.z, 1.1, p.face);
     shadows.push(c.x, this.world.height(c.x, c.z), c.z, 0.7);
 
+    const ticket = this.frame('ngh_ticket');
     for (const e of this.enemies) {
-      const squash = 1 + Math.sin(e.phase) * 0.06;
-      solid.push(e.frame, e.x, e.y, e.z, e.height * squash, e.face, e.flash, 1, Math.sin(e.phase * 0.5) * 0.08, 1 / squash);
+      const fr = e.frozen > 0;
+      const squash = fr ? 1 : 1 + Math.sin(e.phase) * 0.06;
+      // in lista d'attesa: tinta verde acqua (flash negativo), lampeggia nell'ultimo secondo
+      const tint = fr && e.flash < 0.3 && !(e.frozen < 1 && Math.sin(t * 30) > 0) ? -0.75 : e.flash;
+      solid.push(e.frame, e.x, e.y, e.z, e.height * squash, e.face, tint, 1, fr ? 0 : Math.sin(e.phase * 0.5) * 0.08, 1 / squash);
       shadows.push(e.x, e.y - (e.def.hover ?? 0), e.z, e.radius * 2.2);
+      if (fr && e.frozen > 0.3) solid.push(ticket, e.x, e.y + e.height + 0.15 + Math.sin(t * 3 + e.id) * 0.08, e.z, e.boss ? 1.5 : 0.7, 1, 0, 1, Math.sin(t * 2 + e.id) * 0.15);
     }
-    for (const pr of this.projectiles) solid.push(pr.frame, pr.x, pr.y - pr.size * 0.5, pr.z, pr.size, 1, 0, 1, pr.rot);
+    for (const pr of this.projectiles) {
+      const f = pr.anim ? pr.anim[Math.floor(pr.life * 16) % pr.anim.length] : pr.frame;
+      solid.push(f, pr.x, pr.y - pr.size * 0.5, pr.z, pr.size, 1, 0, 1, pr.rot);
+    }
     for (const h of this.hostile) solid.push(h.frame, h.x, h.y - h.size * 0.5, h.z, h.size, 1, 0, 1, h.rot);
     for (const k of this.pickups) {
       const hover = k.magnet ? 0 : 0.25 + Math.sin(k.t * 4) * 0.15;
@@ -1042,24 +1163,53 @@ export class Game {
       if (k.kind === 'card') shadows.push(k.x, this.world.height(k.x, k.z), k.z, 0.8);
     }
     for (const it of this.interactables) {
+      if (it.used && it.kind === 'joscar') continue;
       let f: Frame;
       if (it.kind === 'clinic') {
         const a = this.anim('gpi');
         f = it.used ? this.frame('gpi_off') : a[Math.floor(t * 9 + Math.abs(it.x)) % a.length];
+      } else if (it.kind === 'ngh') {
+        const a = this.anim('ngh');
+        f = it.used ? this.frame('ngh_off') : a[Math.floor(t * 8 + Math.abs(it.z)) % a.length];
+      } else if (it.kind === 'joscar') {
+        // ogni 2,6 s un riflesso attraversa la statuetta
+        const a = this.anim('joscar');
+        const ph = t % 2.6;
+        f = ph < 0.6 ? a[1 + Math.min(a.length - 2, Math.floor(ph / 0.1))] : a[0];
+        const fw = this.rig.forward;
+        fx.push(this.frame('joscar_rays'), it.x + fw.x * 0.6, it.y, it.z + fw.z * 0.6, 7.5, 1, 0, 0.4 + Math.sin(t * 2.4) * 0.12, Math.sin(t * 0.7) * 0.1);
       } else f = this.frame(it.kind === 'chest' ? (it.used ? 'chest_open' : 'chest') : it.kind === 'shrine' ? (it.used ? 'shrine_off' : 'shrine') : it.kind);
-      const h = it.kind === 'chest' ? 2.2 : it.kind === 'portal' ? 6 : it.kind === 'clinic' ? 5.4 : 5;
+      const h = { chest: 2.2, portal: 6, clinic: 5.4, ngh: 5.4, joscar: 3.8, shrine: 5, altar: 5 }[it.kind];
       let glow = 0;
       if (!it.used && it.kind === 'chest' && it.free) glow = 0.25 + Math.sin(t * 6) * 0.25;
       else if (!it.used && it.kind === 'shrine' && it.charge > 0) glow = 0.15 + Math.sin(t * 20) * 0.12;
       else if (!it.used && it.kind === 'clinic' && p.hp < this.stats.maxHp && Math.hypot(it.x - p.x, it.z - p.z) < TUNING.clinicRadius) glow = 0.12 + Math.sin(t * 9) * 0.1;
       solid.push(f, it.x, it.y, it.z, h, 1, glow);
-      shadows.push(it.x, it.y, it.z, it.kind === 'portal' ? 6 : 2.6);
+      shadows.push(it.x, it.y, it.z, it.kind === 'portal' ? 6 : it.kind === 'joscar' ? 2 : 2.6);
+    }
+    // onde del radar NGH: un velo luminoso che si allarga ad anello
+    for (const w of this.waves) {
+      const k = w.r / TUNING.nghRadius;
+      const n = Math.max(24, Math.min(160, Math.round((Math.PI * 2 * w.r) / 1.5)));
+      const f = this.frame('ngh_wave');
+      const h = 2.6 * (1 - k * 0.5);
+      const wScale = Math.max(0.4, (((Math.PI * 2 * w.r) / n) * 1.8) / h);
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const x = w.x + Math.cos(a) * w.r;
+        const z = w.z + Math.sin(a) * w.r;
+        fx.push(f, x, this.world.height(x, z), z, h, 1, 0, 0.65 * (1 - k), 0, wScale);
+      }
     }
     for (const w of this.weapons) drawWeapon(w, this);
     for (const f of this.fxs) {
       const k = 1 - f.life / f.max;
       const size = f.size0 + (f.size1 - f.size0) * k;
-      const frame = f.anim ? f.anim[Math.min(f.anim.length - 1, Math.floor(k * f.anim.length))] : f.frame;
+      const frame = !f.anim
+        ? f.frame
+        : f.fps
+          ? f.anim[Math.floor((f.max - f.life) * f.fps + Math.abs(f.x) * 7) % f.anim.length]
+          : f.anim[Math.min(f.anim.length - 1, Math.floor(k * f.anim.length))];
       fx.push(frame, f.x, f.y - size * 0.5, f.z, size, 1, 0, f.alpha * Math.min(1, (f.life / f.max) * 2), f.rot);
     }
 
