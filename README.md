@@ -1,3 +1,30 @@
+<p align="center">
+  <img src="docs/media/banner.png" alt="JBonk: survivor-like 2.5D a tema ufficio e consulenza IT" width="100%">
+</p>
+
+<p align="center">
+  <img alt="Si gioca nel browser" src="https://img.shields.io/badge/si%20gioca-nel%20browser-ffd23f?style=for-the-badge&labelColor=1b2030">
+  <img alt="Desktop e mobile" src="https://img.shields.io/badge/desktop-%2B%20mobile-39b26a?style=for-the-badge&labelColor=1b2030">
+  <img alt="Three.js" src="https://img.shields.io/badge/Three.js-0.186-f7f5ef?style=for-the-badge&logo=threedotjs&logoColor=white&labelColor=1b2030">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178c6?style=for-the-badge&logo=typescript&logoColor=white&labelColor=1b2030">
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-7-646cff?style=for-the-badge&logo=vite&logoColor=white&labelColor=1b2030">
+  <img alt="Stato: proof of concept" src="https://img.shields.io/badge/stato-POC-e8554e?style=for-the-badge&labelColor=1b2030">
+</p>
+
+<p align="center">
+  <img src="docs/media/hero.gif" alt="Gameplay: il Developer circondato da bug, email e ticket, con paperelle, Claude Code, scudi Angular e alveare JPanik" width="640">
+</p>
+
+<p align="center">
+  <a href="#avvio"><b>Avvio</b></a> ·
+  <a href="#comandi"><b>Comandi</b></a> ·
+  <a href="#il-loop-di-gioco"><b>Il loop di gioco</b></a> ·
+  <a href="#la-mappa-mezzocammino-roma"><b>La mappa</b></a> ·
+  <a href="#sprite-animati-e-loghi"><b>Loghi animati</b></a> ·
+  <a href="#architettura"><b>Architettura</b></a> ·
+  <a href="#come-aggiungere-un-progetto-bioma"><b>Estendere il gioco</b></a>
+</p>
+
 # JBonk — POC
 
 Survivor-like in 2.5D sullo stile di PokeBonk/Megabonk, a tema ufficio e consulenza IT.
@@ -45,6 +72,10 @@ Si gioca meglio col telefono in orizzontale; in verticale il campo visivo si all
 All'avvio della partita il gioco chiede lo schermo intero dove il browser lo permette (non su iPhone né dentro un iframe):
 su iPhone si ottiene aggiungendo la pagina alla schermata Home.
 
+<p align="center">
+  <img src="docs/media/mobile.png" alt="JBonk su telefono in orizzontale: joystick sotto il pollice sinistro, pulsanti Salta e Scatto a destra, HUD compatto" width="640">
+</p>
+
 Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti, `T` +1 ora, `O` +100 €, `N` nuova arma (prima le ultime aggiunte), `C` carta Soldo, `F` onda del radar NGH, `J` statuetta JOscar.
 
 ## Il loop di gioco
@@ -58,6 +89,33 @@ Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti
 - **Totem NGH** (eliminacode NextGenerationHIS, 2 per progetto): si usano una volta. L'onda del radar mette in "lista d'attesa" tutti i nemici che raggiunge: fermi e innocui per 6 secondi (il boss per 2). Cancella anche i proiettili dei boss.
 - **Sala riunioni**: convoca il boss in anticipo. Alle 18:00 arriva comunque, e scatta lo straordinario.
 - **Boss sconfitto → JOscar e ascensore.** Accanto all'ascensore compare la statuetta del JOscar: ritirandola parte la premiazione e si sceglie un premio (carte di rarità almeno Alta). La schermata finale conta i JOscar vinti. L'ascensore porta al progetto successivo; si vince consegnando 3 progetti.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/levelup.png" alt="Promozione: tre carte-ticket tra cui scegliere, con la priorità che ne indica la rarità"></td>
+    <td width="50%"><img src="docs/media/boss.gif" alt="Boss di notte: il Monolite COBOL spara, gli scudi Angular bloccano i proiettili"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Promozione</b><br><sub>1 carta-ticket su 3: la priorità è la rarità</sub></td>
+    <td align="center"><b>Boss di fine giornata</b><br><sub>Il Monolite COBOL contro gli scudi Angular</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/ngh.gif" alt="Totem NGH: l'onda del radar ferma tutti i nemici e dà loro un biglietto"></td>
+    <td width="50%"><img src="docs/media/joscar.gif" alt="Premiazione JOscar: la statuetta vola al giocatore tra i coriandoli"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Totem NGH</b><br><sub>Tutti in lista d'attesa per 6 secondi</sub></td>
+    <td align="center"><b>JOscar</b><br><sub>La premiazione dopo il boss</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/title.png" alt="Schermata del titolo: scelta del personaggio e del primo progetto"></td>
+    <td width="50%"><img src="docs/media/victory.png" alt="Fine partita: tre progetti consegnati, statistiche, JOscar vinti e danni per arma"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Si timbra il cartellino</b><br><sub>3 personaggi, 3 progetti</sub></td>
+    <td align="center"><b>Progetti consegnati!</b><br><sub>Statistiche, JOscar e danni per arma</sub></td>
+  </tr>
+</table>
 
 ## Architettura
 
@@ -103,6 +161,29 @@ Strade, marciapiedi, edifici (con le altezze vere), parchi, campi sportivi, pisc
 strisce pedonali vengono da [Overture Maps](https://overturemaps.org) (dati © OpenStreetMap contributors, ODbL).
 Scala: 1 metro = 0,8 unità di gioco. I tre progetti si svolgono tutti lì e cambiano nemici, boss e luce
 (mattina, notte con finestre e lampioni accesi, tramonto).
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/media/biome-phoenix.png" alt="Progetto Phoenix: Mezzocammino di mattina davanti alla sede JPanik"></td>
+    <td width="33%"><img src="docs/media/biome-atlas.png" alt="Progetto Atlas: Mezzocammino di notte con finestre e lampioni accesi"></td>
+    <td width="33%"><img src="docs/media/biome-helios.png" alt="Progetto Helios: Mezzocammino al tramonto"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Progetto Phoenix</b><br><sub>Mattina · boss: Il Cliente</sub></td>
+    <td align="center"><b>Progetto Atlas</b><br><sub>Notte · boss: Il Monolite COBOL</sub></td>
+    <td align="center"><b>Progetto Helios</b><br><sub>Tramonto · boss: L'Audit Annuale</sub></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/aerial-helios.png" alt="Vista dall'alto di Mezzocammino al tramonto: palazzi con le altezze vere, strade, campi sportivi e alberi"></td>
+    <td width="50%"><img src="docs/media/aerial-atlas.png" alt="Vista dall'alto di Mezzocammino di notte: finestre illuminate e lampioni accesi lungo le strade"></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><sub>Il quartiere visto dall'alto: la sede JPanik è il palazzo grigio al centro, accanto ai campi sportivi</sub></td>
+  </tr>
+</table>
 
 Punti di interesse, nella posizione reale:
 
@@ -150,6 +231,23 @@ ruolo: `start`, `lunch`, `coffee`, `sign`). Il rendering è in `render/city.ts`,
 
 ## Sprite animati e loghi
 
+<p align="center">
+  <img src="docs/media/sprites.gif" alt="Gli sprite animati ricavati dai loghi: Claude Code, Angular, Java, Spring, MongoDB, JPanik, Soldo, NGH, GPI e JOscar" width="640">
+</p>
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="docs/media/weapon-claude.gif" alt="Arma Claude Code: aiutanti che corrono dai nemici"><br><b>Claude Code</b><br><sub>subagenti che corrono dai nemici</sub></td>
+    <td align="center" width="33%"><img src="docs/media/weapon-angular.gif" alt="Arma Scudo Angular: scudi in orbita"><br><b>Scudo Angular</b><br><sub>scudi in orbita, bloccano i proiettili</sub></td>
+    <td align="center" width="33%"><img src="docs/media/weapon-java.gif" alt="Arma Tazza di Java: tazze lanciate a parabola che lasciano pozze di caffè"><br><b>Tazza di Java</b><br><sub>pozze di caffè ustionante</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/weapon-spring.gif" alt="Arma Spring Boot: frisbee che va e torna"><br><b>Spring Boot</b><br><sub>il frisbee che va e torna</sub></td>
+    <td align="center"><img src="docs/media/weapon-mongo.gif" alt="Arma Foglia di MongoDB: la foglia si divide in shard"><br><b>Foglia di MongoDB</b><br><sub>si divide in shard all'impatto</sub></td>
+    <td align="center"><img src="docs/media/weapon-jpanik.gif" alt="Arma Alveare JPanik: gli esagoni del logo inseguono i nemici"><br><b>Alveare JPanik</b><br><sub>gli esagoni inseguono ed esplodono</sub></td>
+  </tr>
+</table>
+
 - Uno sprite con `frames: n` viene disegnato `n` volte: la funzione di disegno riceve il numero del fotogramma (`i`, da 0 a `n-1`) e ogni fotogramma occupa una cella dell'atlas. Nel gioco `game.anim(id)` restituisce tutti i fotogrammi, `game.frame(id)` il primo (usato anche per le icone).
 - I loghi sono in `render/logos/`, un file per logo:
   - **Claude Code**: la mascotte in pixel art, con camminata (4 fotogrammi), riposo con battito di ciglia, attacco a salto e il simbolo di Claude come effetto dei colpi. È l'arma *Claude Code*: aiutanti che corrono dai nemici (i "subagenti" arrivano salendo di livello).
@@ -168,6 +266,23 @@ ruolo: `start`, `lunch`, `coffee`, `sign`). Il rendering è in `render/city.ts`,
 
 - **Arma**: in `config/weapons.ts` scegli un `kind` tra `projectile | orbit | aura | radial | strike | chain | minion | lob | boomerang | split | swarm`, poi imposta statistiche base e upgrade. Un comportamento nuovo va aggiunto in `game/weapons.ts`. Alcuni tipi cercano sprite con suffissi fissi: `minion` (`_idle`, `_hit`, `_spark`), `lob` (`_splash`, `_steam`), `split` (`_l`, `_r`, `_stem`, `_burst`; `pierce` è il numero di shard), `swarm` (celle `_c0`…, `_fly`, `_burst`, più la disposizione dell'alveare in `HIVES` dentro `logos/index.ts`).
 - **Passivo**: in `config/passives.ts` indica la statistica (`stat`), il valore per livello e il formato.
+
+## Screenshot e GIF del README
+
+Le immagini in `docs/media/` sono catturate dal gioco vero con `scripts/readme-media/capture.mjs` (Playwright).
+Il browser gira con un orologio virtuale: ogni fotogramma fa avanzare la partita di un passo fisso, quindi le GIF
+restano fluide anche dove il rendering è lento (headless, senza GPU). Le scene preparano la situazione da sole:
+personaggio, armi, posizione sulla mappa, nemici, boss.
+
+```bash
+npm run dev                                                     # in un altro terminale
+npm i --no-save playwright && npx playwright install chromium   # la prima volta
+node scripts/readme-media/capture.mjs                           # tutte le scene
+node scripts/readme-media/capture.mjs hero weapons              # solo alcune
+```
+
+Scene: `banner`, `title`, `hero`, `levelup`, `biomes`, `aerial`, `boss`, `weapons`, `ngh`, `joscar`, `victory`, `mobile`, `sprites`.
+Serve `ffmpeg`; se c'è anche `gifsicle` (nel PATH o in `$GIFSICLE`) le GIF pesano circa un terzo in meno.
 
 ## Limiti noti del POC
 
