@@ -7,8 +7,10 @@ import { TUNING, xpForLevel } from '../config/tuning';
 import { WEAPONS } from '../config/weapons';
 import type { BiomeDef, CharacterDef, EnemyDef, StatKey, Stats } from '../config/types';
 import type { Atlas, Frame } from '../render/atlas';
+import { getMap } from '../maps';
 import { BillboardBatch, ShadowBatch } from '../render/billboards';
-import { World } from '../render/world';
+import { CityWorld } from '../render/city';
+import { type GameWorld, World } from '../render/world';
 import type { Audio } from './audio';
 import { CameraRig } from './camera';
 import { shrineCards, upgradeCards } from './cards';
@@ -55,6 +57,10 @@ interface FxOpts {
 }
 
 const tmpPt = { x: 0, z: 0 };
+const tmpDir = { x: 0, z: 0 };
+const tmpTarget = new THREE.Vector3();
+const NAV_RADIUS = 60; // celle (da 2 unità) intorno al giocatore in cui i nemici aggirano gli ostacoli
+const RELOCATE_DIST = 95; // i nemici rimasti troppo indietro ricompaiono vicino al giocatore
 
 export class Game {
   readonly scene = new THREE.Scene();
@@ -64,7 +70,7 @@ export class Game {
   readonly fx: BillboardBatch;
   readonly shadows: ShadowBatch;
   readonly decals: ShadowBatch; // macchie a terra (pozze di caffè)
-  world!: World;
+  world!: GameWorld;
   biome!: BiomeDef;
 
   mode: Mode = 'play';
@@ -102,7 +108,8 @@ export class Game {
   hurtFlash = 0;
   god = false;
 
-  private hash: SpatialHash;
+  private hash!: SpatialHash;
+  private navT = 0;
   private nearIdx: number[] = [];
   private nextId = 1;
   private spawnAcc = 0;
@@ -131,7 +138,6 @@ export class Game {
     this.shadows = new ShadowBatch(3000);
     this.decals = new ShadowBatch(128, 0x6b3e1f, 0.55);
     this.scene.add(this.solid.mesh, this.fx.mesh, this.shadows.mesh, this.decals.mesh);
-    this.hash = new SpatialHash(TUNING.arenaHalf, 4, 1024);
     this.biomeIdx = startBiome;
     this.player = {
       x: 0, y: 0, z: 0, vy: 0, grounded: true, face: 1, hp: 100, invuln: 0,
@@ -150,8 +156,12 @@ export class Game {
     this.biome = BIOMES[this.biomeIdx % BIOMES.length];
     const seed = (Math.random() * 1e9) | 0;
     const spotCount = 1 + TUNING.shrineCount + TUNING.clinicCount + TUNING.nghCount + TUNING.chestCount;
-    this.world = new World(this.scene, this.biome, TUNING.arenaHalf, seed, spotCount);
+    this.world = this.biome.map
+      ? new CityWorld(this.scene, this.biome, getMap(this.biome.map), this.atlas, spotCount)
+      : new World(this.scene, this.biome, TUNING.arenaHalf, seed, spotCount);
     this.scene.add(this.world.group);
+    this.hash = new SpatialHash(this.world.half, 4, 1024);
+    this.navT = 0;
     this.enemies = [];
     this.projectiles = [];
     this.hostile = [];
@@ -167,10 +177,19 @@ export class Game {
     this.eliteT = 0;
     this.swarmsDone.clear();
 
-    // la sala riunioni è il punto più lontano dal centro, poi macchinette, presidi GPI e totem NGH
-    const spots = [...this.world.spots].sort((a, b) => Math.hypot(b.x, b.z) - Math.hypot(a.x, a.z));
+    // i locali della mappa reale: pausa pranzo nei ristoranti, macchinetta del caffè nei bar
+    let bars = 0;
+    for (const place of this.world.places) {
+      const kind = place.role === 'lunch' ? 'lunch' : place.role === 'coffee' ? 'shrine' : null;
+      if (!kind) continue;
+      if (kind === 'shrine') bars++;
+      this.interactables.push({ kind, x: place.x, z: place.z, y: this.world.height(place.x, place.z), used: false, charge: 0, free: false, place });
+    }
+    // la sala riunioni è il punto più lontano dalla partenza, poi macchinette (se non ci sono bar), presidi GPI e totem NGH
+    const st = this.world.start;
+    const spots = [...this.world.spots].sort((a, b) => Math.hypot(b.x - st.x, b.z - st.z) - Math.hypot(a.x - st.x, a.z - st.z));
     const order: InteractKind[] = ['altar'];
-    for (const [kind, n] of [['shrine', TUNING.shrineCount], ['clinic', TUNING.clinicCount], ['ngh', TUNING.nghCount]] as const)
+    for (const [kind, n] of [['shrine', bars ? 0 : TUNING.shrineCount], ['clinic', TUNING.clinicCount], ['ngh', TUNING.nghCount]] as const)
       for (let k = 0; k < n; k++) order.push(kind);
     spots.forEach((s, i) => {
       const kind = order[i] ?? 'chest';
@@ -178,14 +197,15 @@ export class Game {
     });
 
     const p = this.player;
-    p.x = 0;
-    p.z = 0;
-    p.y = this.world.height(0, 0);
+    p.x = st.x;
+    p.z = st.z;
+    p.y = this.world.height(p.x, p.z);
     p.vy = 0;
     for (const w of this.weapons) w.resetStage(p.x, p.y, p.z);
-    this.companion.x = -1.5;
-    this.companion.z = 1;
+    this.companion.x = p.x - 1.5;
+    this.companion.z = p.z + 1;
     this.companion.y = p.y + 1;
+    this.rig.yaw = st.yaw;
     this.rig.snap();
     this.hooks.stage(this.biome, this.stage);
   }
@@ -376,13 +396,10 @@ export class Game {
   }
 
   spawnEnemy(def: EnemyDef, x?: number, z?: number): Enemy {
-    const p = this.player;
     if (x === undefined || z === undefined) {
-      const a = Math.random() * Math.PI * 2;
-      const [d0, d1] = TUNING.spawnDistance;
-      const d = d0 + Math.random() * (d1 - d0);
-      x = p.x + Math.cos(a) * d;
-      z = p.z + Math.sin(a) * d;
+      this.spawnPoint(tmpPt);
+      x = tmpPt.x;
+      z = tmpPt.z;
     }
     tmpPt.x = x;
     tmpPt.z = z;
@@ -397,13 +414,29 @@ export class Game {
       x: tmpPt.x, z: tmpPt.z, y: this.world.height(tmpPt.x, tmpPt.z) + (def.hover ?? 0),
       kx: 0, kz: 0, hp: def.hp * hpMul, maxHp: def.hp * hpMul,
       speed: def.speed * (0.9 + Math.random() * 0.2), damage: def.damage * dmgMul,
-      radius: def.radius, height: def.height, flash: 0, face: 1, phase: Math.random() * 10, alive: true, frozen: 0,
+      radius: def.radius, height: def.height, flash: 0, face: 1, phase: Math.random() * 10, alive: true, frozen: 0, lost: 0,
       elite: kind === 'elite', boss: kind === 'boss',
       shotT: def.boss ? def.boss.shotEvery : 0, chargeT: def.boss ? def.boss.chargeEvery : 0,
       telegraph: 0, charging: 0, cx: 0, cz: 0,
     };
     this.enemies.push(e);
     return e;
+  }
+
+  /** Punto a distanza di spawn dal giocatore; con la navigazione, solo dove si arriva a piedi. */
+  private spawnPoint(out: { x: number; z: number }) {
+    const p = this.player;
+    const nav = this.world.nav;
+    const [d0, d1] = TUNING.spawnDistance;
+    for (let tries = 0; tries < 12; tries++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = d0 + Math.random() * (d1 - d0);
+      out.x = p.x + Math.cos(a) * d;
+      out.z = p.z + Math.sin(a) * d;
+      const lim = this.world.half - 3;
+      if (Math.abs(out.x) > lim || Math.abs(out.z) > lim) continue;
+      if (!nav || nav.reachable(out.x, out.z)) return;
+    }
   }
 
   spawnBoss() {
@@ -757,13 +790,36 @@ export class Game {
     const p = this.player;
     const near: Enemy[] = [];
     const r = this.rig.right;
+    const nav = this.world.nav;
+    if (nav && (this.navT -= dt) <= 0) {
+      this.navT = 0.25;
+      nav.flood(p.x, p.z, NAV_RADIUS);
+    }
     for (const e of this.enemies) {
       if (!e.alive) continue;
-      const dx = p.x - e.x;
-      const dz = p.z - e.z;
-      const d = Math.hypot(dx, dz) || 1;
+      let dx = p.x - e.x;
+      let dz = p.z - e.z;
+      let d = Math.hypot(dx, dz) || 1;
+      // rimasti troppo indietro o chiusi in un cortile: ricompaiono vicino al giocatore
+      if (d > RELOCATE_DIST || (e.lost > 1.5 && !e.boss)) {
+        this.spawnPoint(tmpPt);
+        e.x = tmpPt.x;
+        e.z = tmpPt.z;
+        e.lost = 0;
+        dx = p.x - e.x;
+        dz = p.z - e.z;
+        d = Math.hypot(dx, dz) || 1;
+      }
       let vx = (dx / d) * e.speed;
       let vz = (dz / d) * e.speed;
+      // dietro un palazzo: segue il campo di flusso invece della linea d'aria
+      if (nav && d > 3 && !nav.clear(e.x, e.z, p.x, p.z)) {
+        if (nav.step(e.x, e.z, tmpDir)) {
+          vx = tmpDir.x * e.speed;
+          vz = tmpDir.z * e.speed;
+          e.lost = 0;
+        } else if (nav.stranded(e.x, e.z, NAV_RADIUS, p.x, p.z)) e.lost += dt;
+      }
 
       const frozen = e.frozen > 0;
       if (frozen) {
@@ -976,10 +1032,16 @@ export class Game {
         // scintille intorno alla statuetta
         this.spawnFx('sparkle', it.x + (Math.random() - 0.5) * 1.6, it.y + 0.6 + Math.random() * 3, it.z + (Math.random() - 0.5) * 1.6, { size0: 0.9, size1: 0, life: 0.55, rot: Math.random() });
       }
+      if (it.kind === 'lunch') {
+        if (d < 3.4) this.useLunch(it, dt);
+        else it.charge = Math.max(0, it.charge - dt);
+        continue;
+      }
       if (it.kind === 'shrine') {
         if (d < 3.4) {
           it.charge += dt;
-          this.prompt = `Macchinetta del caffè: resta qui… ${Math.min(100, Math.round((it.charge / TUNING.shrineChargeTime) * 100))}%`;
+          const where = it.place ? `Pausa caffè da ${it.place.name}` : 'Macchinetta del caffè';
+          this.prompt = `${where}: resta qui… ${Math.min(100, Math.round((it.charge / TUNING.shrineChargeTime) * 100))}%`;
           if (it.charge >= TUNING.shrineChargeTime) {
             it.used = true;
             this.audio.play('open');
@@ -1066,6 +1128,30 @@ export class Game {
       t: 1.3,
       make: () => ({ title: 'Premio JOscar', subtitle: `Miglior contributo a ${project}: scegli il premio`, cards: upgradeCards(this, 2), skipLabel: null }),
     });
+  }
+
+  /** Pausa pranzo: si resta al tavolino qualche secondo e si recupera una parte degli HP. Una volta al giorno per locale. */
+  private useLunch(it: Interactable, dt: number) {
+    const p = this.player;
+    const name = it.place?.name ?? 'Ristorante';
+    if (this.stats.maxHp - p.hp < 1) {
+      this.prompt = `${name}: sei sazio, torna quando hai fame`;
+      it.charge = 0;
+      return;
+    }
+    it.charge += dt;
+    this.prompt = `Pausa pranzo da ${name}… ${Math.min(100, Math.round((it.charge / TUNING.lunchTime) * 100))}%`;
+    if (it.charge < TUNING.lunchTime) return;
+    it.used = true;
+    const v = this.stats.maxHp * TUNING.lunchHeal;
+    this.heal(v);
+    this.addNumber(p.x, p.y + 2.4, p.z, `+${Math.round(v)} HP`, true, '#5dfd8a');
+    for (let i = 0; i < 8; i++) {
+      this.spawnFx('heal_plus', p.x + (Math.random() - 0.5) * 2, p.y + 0.8 + Math.random(), p.z + (Math.random() - 0.5) * 2, { size0: 0.7, size1: 0.3, life: 0.9, vy: 2.6 });
+    }
+    if (it.place?.icon) this.spawnFx(it.place.icon, it.x, it.y + 3, it.z, { size0: 1.6, size1: 2.4, life: 1, vy: 2, alpha: 0.9 });
+    this.hooks.banner(`Pausa pranzo da ${name}: energie ricaricate!`, 'good');
+    this.audio.play('coin');
   }
 
   /** Presidio GPI: cura finché resti vicino, fino a esaurire la scorta. */
@@ -1178,14 +1264,20 @@ export class Game {
         f = ph < 0.6 ? a[1 + Math.min(a.length - 2, Math.floor(ph / 0.1))] : a[0];
         const fw = this.rig.forward;
         fx.push(this.frame('joscar_rays'), it.x + fw.x * 0.6, it.y, it.z + fw.z * 0.6, 7.5, 1, 0, 0.4 + Math.sin(t * 2.4) * 0.12, Math.sin(t * 0.7) * 0.1);
-      } else f = this.frame(it.kind === 'chest' ? (it.used ? 'chest_open' : 'chest') : it.kind === 'shrine' ? (it.used ? 'shrine_off' : 'shrine') : it.kind);
-      const h = { chest: 2.2, portal: 6, clinic: 5.4, ngh: 5.4, joscar: 3.8, shrine: 5, altar: 5 }[it.kind];
+      } else if (it.kind === 'lunch') f = this.frame(it.used ? 'lunch_off' : 'lunch');
+      else f = this.frame(it.kind === 'chest' ? (it.used ? 'chest_open' : 'chest') : it.kind === 'shrine' ? (it.used ? 'shrine_off' : 'shrine') : it.kind);
+      const h = { chest: 2.2, portal: 6, clinic: 5.4, ngh: 5.4, joscar: 3.8, shrine: 5, altar: 5, lunch: 4.4 }[it.kind];
       let glow = 0;
       if (!it.used && it.kind === 'chest' && it.free) glow = 0.25 + Math.sin(t * 6) * 0.25;
-      else if (!it.used && it.kind === 'shrine' && it.charge > 0) glow = 0.15 + Math.sin(t * 20) * 0.12;
+      else if (!it.used && (it.kind === 'shrine' || it.kind === 'lunch') && it.charge > 0) glow = 0.15 + Math.sin(t * 20) * 0.12;
       else if (!it.used && it.kind === 'clinic' && p.hp < this.stats.maxHp && Math.hypot(it.x - p.x, it.z - p.z) < TUNING.clinicRadius) glow = 0.12 + Math.sin(t * 9) * 0.1;
       solid.push(f, it.x, it.y, it.z, h, 1, glow);
       shadows.push(it.x, it.y, it.z, it.kind === 'portal' ? 6 : it.kind === 'joscar' ? 2 : 2.6);
+    }
+    // segnaposto dei locali: galleggiano sopra l'ingresso, visibili anche da lontano
+    for (const pl of this.world.places) {
+      if (!pl.icon) continue;
+      solid.push(this.frame(pl.icon), pl.x, pl.top + Math.sin(t * 2 + pl.x) * 0.25, pl.z, 2.4, 1, 0, 1, 0);
     }
     // onde del radar NGH: un velo luminoso che si allarga ad anello
     for (const w of this.waves) {
@@ -1218,7 +1310,13 @@ export class Game {
     fx.end(this.rig.right, fog);
     shadows.end();
     this.decals.end();
+    this.world.beforeRender(this.camera, tmpTarget.set(p.x, p.y + 1.2, p.z));
     renderer.render(this.scene, this.camera);
+  }
+
+  /** Dove si trova il giocatore: il locale davanti a cui sta o la via (solo mappe reali). */
+  location(): string | null {
+    return this.world.locate(this.player.x, this.player.z);
   }
 
   /** Orario di gioco: la giornata va dalle 9:00 alle 18:00, poi straordinario. */

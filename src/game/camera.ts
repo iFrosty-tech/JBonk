@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Input } from './input';
-import type { World } from '../render/world';
+import type { GameWorld } from '../render/world';
 
 // Camera in terza persona che orbita attorno al giocatore (mouse) e segue il terreno.
 
@@ -21,7 +21,7 @@ export class CameraRig {
     this.first = true;
   }
 
-  update(dt: number, input: Input | null, px: number, py: number, pz: number, world: World) {
+  update(dt: number, input: Input | null, px: number, py: number, pz: number, world: GameWorld) {
     if (input) {
       this.yaw -= input.mouseDX * 0.0032 * this.sensitivity;
       this.pitch = Math.min(1.15, Math.max(0.12, this.pitch + input.mouseDY * 0.0025 * this.sensitivity));

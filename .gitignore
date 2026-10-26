@@ -1,3 +1,5 @@
 node_modules
 dist
 artifact
+scripts/map/.cache
+__pycache__

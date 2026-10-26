@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { INK, type G, type SpriteDef, circ, ell, line, makeCanvas, path, poly, rr, txt } from './draw';
 import { LOGO_SPRITES, loadLogoImages } from './logos/index';
+import { drawJpanikLogo } from './logos/jpanik';
 
 // Tutti gli sprite del gioco sono disegnati via codice su un unico canvas (texture atlas).
 // Stile "sagoma di cartone": forma piena + bordo bianco + filo scuro, come le standee da ufficio.
@@ -636,6 +637,16 @@ const sprites: SpriteDef[] = [
   { id: 'chest_open', cw: 1, ch: 1, draw: (g) => box(g, true) },
   { id: 'shrine', cw: 1, ch: 2, draw: (g) => coffeeMachine(g, true) },
   { id: 'shrine_off', cw: 1, ch: 2, draw: (g) => coffeeMachine(g, false) },
+  { id: 'lunch', cw: 1, ch: 2, draw: (g) => lunchTable(g, true) },
+  { id: 'lunch_off', cw: 1, ch: 2, draw: (g) => lunchTable(g, false) },
+
+  // Segnaposto dei locali sulle mappe reali (galleggiano sopra l'ingresso)
+  { id: 'pin_jpanik', cw: 1, ch: 1, draw: (g) => pin(g, '#fc4c02', () => drawJpanikLogo(g, 64, 50, 0.3)) },
+  { id: 'pin_sushi', cw: 1, ch: 1, draw: (g) => pin(g, '#d7263d', () => sushi(g)) },
+  { id: 'pin_pizza', cw: 1, ch: 1, draw: (g) => pin(g, '#e8554e', () => slice(g)) },
+  { id: 'pin_poke', cw: 1, ch: 1, draw: (g) => pin(g, '#2bb7aa', () => bowl(g)) },
+  { id: 'pin_coffee', cw: 1, ch: 1, draw: (g) => pin(g, '#8a4b2a', () => cup(g)) },
+  { id: 'pin_sport', cw: 1, ch: 1, draw: (g) => pin(g, '#1c4fa0', () => ball(g)) },
   {
     id: 'altar', cw: 1, ch: 2,
     draw: (g) => {
@@ -707,6 +718,95 @@ function coffeeMachine(g: G, on: boolean) {
     line(g, [70, 160, 72, 148], '#c5ccd8', 3);
   }
   rr(g, 22, 220, 84, 14, 3, '#3c4250', true, 2.5);
+}
+
+/** Tavolino all'aperto con ombrellone: la pausa pranzo davanti ai ristoranti. */
+function lunchTable(g: G, open: boolean) {
+  line(g, [64, 60, 64, 200], '#6b6f78', 6);
+  if (open) {
+    // ombrellone a spicchi bianchi e rossi
+    const pts = [6, 78, 64, 26, 122, 78];
+    poly(g, pts, '#ffffff', true, 4);
+    for (let k = 0; k < 4; k += 2) poly(g, [6 + k * 29, 78, 64, 26, 35 + k * 29, 78], '#d8343f', false);
+    for (let k = 0; k < 4; k++) {
+      g.beginPath();
+      g.arc(20.5 + k * 29, 78, 14.5, 0, Math.PI);
+      path(g, k % 2 ? '#ffffff' : '#d8343f', true, 3);
+    }
+  } else {
+    poly(g, [56, 40, 64, 20, 72, 40, 68, 130, 60, 130], '#d8343f', true, 4);
+  }
+  // sedie
+  rr(g, 6, 168, 14, 58, 3, '#8a5a3b', true, 3);
+  rr(g, 108, 168, 14, 58, 3, '#8a5a3b', true, 3);
+  rr(g, 6, 196, 30, 8, 2, '#8a5a3b', true, 3);
+  rr(g, 92, 196, 30, 8, 2, '#8a5a3b', true, 3);
+  // tavolo e piatto
+  line(g, [52, 196, 46, 238], INK, 5);
+  line(g, [76, 196, 82, 238], INK, 5);
+  ell(g, 64, 192, 46, 12, '#f4f1ea');
+  if (open) {
+    ell(g, 64, 186, 22, 7, '#ffffff');
+    poly(g, [50, 184, 78, 180, 66, 190], '#f3b13a', true, 2.5);
+    circ(g, 62, 184, 3, '#d8343f', false);
+    circ(g, 70, 183, 3, '#d8343f', false);
+  } else ell(g, 64, 186, 22, 7, '#e3dfd6');
+}
+
+/** Segnaposto a goccia con un'icona dentro il cerchio. */
+function pin(g: G, color: string, icon: () => void) {
+  g.beginPath();
+  g.arc(64, 50, 44, Math.PI * 0.82, Math.PI * 2.18);
+  g.lineTo(64, 124);
+  g.closePath();
+  path(g, color, true, 4);
+  circ(g, 64, 50, 34, '#ffffff', false);
+  icon();
+}
+function sushi(g: G) {
+  circ(g, 64, 50, 26, '#1f3a2b', true, 3);
+  circ(g, 64, 50, 19, '#ffffff', false);
+  circ(g, 64, 50, 10, '#ff8a5c', false);
+  circ(g, 61, 47, 3, '#ffd0b8', false);
+}
+function slice(g: G) {
+  poly(g, [40, 30, 90, 30, 64, 80], '#f3b13a', true, 3);
+  rr(g, 36, 24, 58, 10, 5, '#b8742e', true, 3);
+  circ(g, 56, 42, 5, '#d8343f', false);
+  circ(g, 72, 44, 5, '#d8343f', false);
+  circ(g, 64, 60, 4.5, '#d8343f', false);
+}
+function bowl(g: G) {
+  g.beginPath();
+  g.arc(64, 46, 28, 0, Math.PI);
+  g.closePath();
+  path(g, '#2bb7aa', true, 3);
+  circ(g, 52, 42, 7, '#ff8a5c', true, 2);
+  circ(g, 66, 39, 7, '#7cc35b', true, 2);
+  circ(g, 78, 43, 6, '#ffd23f', true, 2);
+}
+function cup(g: G) {
+  rr(g, 42, 40, 36, 30, 6, '#ffffff', true, 3);
+  g.beginPath();
+  g.arc(80, 54, 8, -Math.PI / 2, Math.PI / 2);
+  g.lineWidth = 4;
+  g.strokeStyle = INK;
+  g.stroke();
+  ell(g, 60, 42, 16, 4, '#6b3e1f', false);
+  rr(g, 34, 70, 54, 6, 3, '#ffffff', true, 2.5);
+  line(g, [54, 34, 58, 22], '#9aa5b8', 3);
+  line(g, [66, 34, 70, 22], '#9aa5b8', 3);
+}
+function ball(g: G) {
+  circ(g, 64, 50, 25, '#d6ec3a', true, 3);
+  g.lineWidth = 3;
+  g.strokeStyle = '#ffffff';
+  g.beginPath();
+  g.arc(36, 50, 22, -0.9, 0.9);
+  g.stroke();
+  g.beginPath();
+  g.arc(92, 50, 22, Math.PI - 0.9, Math.PI + 0.9);
+  g.stroke();
 }
 
 // ---------- costruzione dell'atlas ----------

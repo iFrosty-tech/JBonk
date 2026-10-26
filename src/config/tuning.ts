@@ -25,6 +25,8 @@ export const TUNING = {
   shrineCount: 3,
   chestBaseCost: 12,
   shrineChargeTime: 2.5,
+  lunchTime: 2, // secondi al tavolino per la pausa pranzo
+  lunchHeal: 0.5, // frazione degli HP massimi recuperata
   clinicCount: 2, // presidi GPI per progetto
   clinicStock: 80, // HP che un presidio può erogare
   clinicRate: 16, // HP al secondo

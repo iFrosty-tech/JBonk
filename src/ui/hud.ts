@@ -130,8 +130,9 @@ export class Hud {
       this.time.textContent = c.text;
       this.clock.classList.toggle('overtime', c.overtime);
     });
-    this.set('where', g.biome.id + c.overtime, () => {
-      this.where.textContent = c.overtime ? 'Straordinario!' : `${g.biome.project} · ${g.biome.place}`;
+    const loc = g.location();
+    this.set('where', g.biome.id + c.overtime + loc, () => {
+      this.where.textContent = c.overtime ? 'Straordinario!' : `${g.biome.project} · ${loc ?? g.biome.place}`;
     });
     this.hurt.style.opacity = String(g.hurtFlash * 0.8);
 
@@ -238,6 +239,18 @@ export class Hud {
     ctx.beginPath();
     ctx.arc(R, R, R, 0, Math.PI * 2);
     ctx.clip();
+    // pianta della mappa reale, ruotata come la camera
+    const mm = g.world.minimap;
+    if (mm) {
+      ctx.save();
+      ctx.translate(R, R);
+      ctx.rotate(yaw);
+      ctx.scale(k, k);
+      ctx.translate(-p.x, -p.z);
+      ctx.globalAlpha = 0.9;
+      ctx.drawImage(mm.canvas, -mm.half, -mm.half, mm.half * 2, mm.half * 2);
+      ctx.restore();
+    }
     // bordo dell'arena
     ctx.strokeStyle = 'rgba(255,255,255,0.35)';
     ctx.lineWidth = 3;
@@ -267,11 +280,11 @@ export class Hud {
       if (q) ctx.fillRect(q[0] - 3, q[1] - 3, 6, 6);
     }
     for (const it of g.interactables) {
-      if (it.used && it.kind !== 'portal') continue;
+      if ((it.used && it.kind !== 'portal') || it.place) continue; // i locali hanno già il loro segnaposto
       const important = it.kind === 'altar' || it.kind === 'portal' || it.kind === 'joscar';
       const q = proj(it.x, it.z, important);
       if (!q) continue;
-      const color = { chest: '#ffd23f', shrine: '#ff8c5a', altar: '#b48cff', clinic: '#ee7d01', ngh: '#81cbd0', joscar: '#f5c542', portal: '#5dfd8a' }[it.kind];
+      const color = { chest: '#ffd23f', shrine: '#ff8c5a', altar: '#b48cff', clinic: '#ee7d01', ngh: '#81cbd0', joscar: '#f5c542', portal: '#5dfd8a', lunch: '#5dfd8a' }[it.kind];
       ctx.fillStyle = color;
       ctx.strokeStyle = '#10131c';
       ctx.lineWidth = 3;
@@ -303,6 +316,14 @@ export class Hud {
         ctx.arc(q[0], q[1], 3.5, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+    // locali principali della mappa: il loro segnaposto
+    for (const pl of g.world.places) {
+      if (!pl.icon) continue;
+      const q = proj(pl.x, pl.z, false);
+      if (!q) continue;
+      const f = this.atlas.get(pl.icon);
+      ctx.drawImage(this.atlas.canvas, f.cx * 128, f.cy * 128, 128, 128, q[0] - 15, q[1] - 26, 30, 30);
     }
     for (const e of g.enemies) {
       if (!e.boss && !e.elite) continue;

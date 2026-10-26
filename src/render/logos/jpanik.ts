@@ -62,10 +62,10 @@ function hexTile(g: G, h: number[], ox: number, oy: number, k: number) {
   hexShape(g, h, ox, oy, k, FACE);
 }
 
-function jpanikLogo(g: G) {
-  const k = 0.58;
-  const ox = 64 - CENTER.x * k;
-  const oy = 64 - CENTER.y * k;
+/** Il logo intero centrato in (cx, cy); `k` = px per px del logo originale (200×200). */
+export function drawJpanikLogo(g: G, cx = 64, cy = 64, k = 0.58) {
+  const ox = cx - CENTER.x * k;
+  const oy = cy - CENTER.y * k;
   for (const h of HEXES) hexTile(g, h, ox, oy, k);
 }
 
@@ -162,7 +162,7 @@ export const JPANIK_HIVE: HiveLayout = {
 };
 
 export const JPANIK_SPRITES: SpriteDef[] = [
-  { id: 'jpanik', cw: 1, ch: 1, draw: jpanikLogo },
+  { id: 'jpanik', cw: 1, ch: 1, draw: (g) => drawJpanikLogo(g) },
   ...HEXES.map((_, idx): SpriteDef => ({ id: `jpanik_c${idx}`, cw: 1, ch: 1, draw: (g) => jpanikCell(g, idx) })),
   { id: 'jpanik_fly', cw: 1, ch: 1, frames: 8, draw: (g, _w, _h, i, n) => hexPrism(g, i, n) },
   { id: 'jpanik_burst', cw: 1, ch: 1, frames: 6, draw: (g, _w, _h, i, n) => hexBurst(g, i, n) },

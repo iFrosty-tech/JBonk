@@ -1,4 +1,5 @@
 import type { Frame } from '../render/atlas';
+import type { Place } from '../render/world';
 import type { EnemyDef } from '../config/types';
 
 export interface Player {
@@ -38,6 +39,7 @@ export interface Enemy {
   phase: number;
   alive: boolean;
   frozen: number; // secondi rimasti "in lista d'attesa" (totem NGH)
+  lost: number; // secondi passati senza strada verso il giocatore (es. in un cortile chiuso)
   elite: boolean;
   boss: boolean;
   // solo boss
@@ -90,7 +92,7 @@ export interface Pickup {
   t: number;
 }
 
-export type InteractKind = 'chest' | 'shrine' | 'altar' | 'portal' | 'clinic' | 'ngh' | 'joscar';
+export type InteractKind = 'chest' | 'shrine' | 'altar' | 'portal' | 'clinic' | 'ngh' | 'joscar' | 'lunch';
 
 export interface Interactable {
   kind: InteractKind;
@@ -98,8 +100,9 @@ export interface Interactable {
   y: number;
   z: number;
   used: boolean;
-  charge: number; // macchinetta: secondi di attesa; presidio: HP già erogati
+  charge: number; // macchinetta e pranzo: secondi di attesa; presidio: HP già erogati
   free: boolean;
+  place?: Place; // il locale della mappa (bar, ristorante) in cui si trova
 }
 
 export interface Fx {

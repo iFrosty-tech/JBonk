@@ -60,12 +60,15 @@ src/
     logos/           sprite animati dai loghi di tecnologie, clienti e premi: un file per logo, elenco in index.ts
     draw.ts          primitive di disegno condivise
     billboards.ts    TUTTI gli sprite in 1 draw call (quad istanziati rivolti alla camera) + ombre
-    world.ts         terreno a colline con piastrelle, muri, luci, collisioni con gli arredi
+    world.ts         interfaccia del mondo (GameWorld) e arena procedurale: colline, piastrelle, muri, arredi
+    city.ts          mappe reali: terreno a strati, edifici estrusi, alberi, lampioni, insegne, collisioni, minimappa
     props.ts         arredi low-poly fatti con primitive (scrivanie, rack, colonne…)
+  maps/              mappe reali generate da scripts/map/build_map.py (mezzocammino.json) e il loro formato
   game/
     game.ts          stato della partita e loop: player, nemici, director delle ondate, boss, pickup, interattivi
     weapons.ts       11 pattern d'arma: projectile, orbit, aura, radial, strike, chain, minion, lob, boomerang, split, swarm
     cards.ts         generazione carte (level-up, forziere, caffè) e rarità
+    nav.ts           griglia di navigazione: i nemici aggirano i palazzi (campo di flusso dal giocatore)
     camera.ts, input.ts, spatial.ts (griglia per le collisioni), audio.ts (suoni sintetizzati)
   ui/                HUD, minimappa, numeri di danno, schermate (titolo, carte, pausa, fine partita)
 ```
@@ -75,6 +78,46 @@ Scelte tecniche:
 - **2.5D**: mondo 3D low-poly, personaggi come sprite 2D "in piedi" (billboard cilindrici) con ombra a disco.
 - **Prestazioni**: la logica con 280 nemici e 5 armi costa circa **0,7 ms per frame** (misurato). Tutti gli sprite stanno in una sola draw call.
 - **Niente asset esterni**: sprite su canvas, arredi da primitive, effetti sonori in WebAudio. Le immagini dei loghi raster sono incluse nel bundle come data URL. Il bundle è un solo file JS (~810 KB, ~285 KB gzip).
+
+## La mappa: Mezzocammino (Roma)
+
+Per ora c'è una sola mappa: il quartiere reale intorno alla sede JPanik, **Viale Gianluigi Bonelli 40**.
+Strade, marciapiedi, edifici (con le altezze vere), parchi, campi sportivi, piscine, fermate dell'autobus e
+strisce pedonali vengono da [Overture Maps](https://overturemaps.org) (dati © OpenStreetMap contributors, ODbL).
+Scala: 1 metro = 0,8 unità di gioco. I tre progetti si svolgono tutti lì e cambiano nemici, boss e luce
+(mattina, notte con finestre e lampioni accesi, tramonto).
+
+Punti di interesse, nella posizione reale:
+
+| Locale | Indirizzo | Nel gioco |
+|---|---|---|
+| JPanik | Viale Gianluigi Bonelli 40 | si parte davanti all'ingresso |
+| Konan Sushi | Viale Gianluigi Bonelli 219 | pausa pranzo (cura il 50% degli HP, una volta al giorno) |
+| Alberto's Pizza | Viale Gianluigi Bonelli 239 | pausa pranzo |
+| Jungle Pokè | Largo Attilio Mussino 9 | pausa pranzo |
+| Ami Pokè | Viale Bartolomeo Cavaceppi 18 | pausa pranzo |
+| Barcode | Via Vico Consorti 220 | pausa caffè (bonus permanente) |
+| Enjoy Sporting Club | Via Cristoforo Colombo 1800 | pausa caffè al bar dello sporting |
+| Bar Colombo | Viale Bartolomeo Cavaceppi 103 | pausa caffè |
+
+Altre insegne del quartiere: Pasticceria Positano, Nomisan, Pad Thai Kung, Manifattura Mare e Miscele, Inforno,
+Edicola Batman, Farmacia Mezzocammino, Ferramenta, Distributore IP, Climbing Side, Pandolce, Pizza & More,
+Tabacchi, Gustus, Numero 10, BCC e il Parco Corto Maltese. I locali principali hanno un segnaposto sopra
+l'ingresso e sulla minimappa; l'HUD mostra la via in cui ti trovi o il locale davanti a cui sei.
+
+I palazzi bloccano il passaggio: i nemici li aggirano con una griglia di navigazione (`game/nav.ts`) e la camera
+"buca" ciò che sta tra lei e il giocatore. Il confine dell'area di gioco è una rete arancione da cantiere.
+
+**Rigenerare la mappa** (serve Python 3; i dati scaricati restano in `scripts/map/.cache`):
+
+```bash
+pip install -r scripts/map/requirements.txt
+python scripts/map/build_map.py --fetch   # la prima volta: scarica i dati Overture della zona
+python scripts/map/build_map.py           # rigenera src/maps/mezzocammino.json
+```
+
+In `build_map.py` si cambiano area e scala (`CENTER_M`, `HALF_M`, `SCALE`) e la lista dei locali (`POIS`, con
+ruolo: `start`, `lunch`, `coffee`, `sign`). Il rendering è in `render/city.ts`, il formato dei dati in `maps/types.ts`.
 
 ## Come aggiungere un progetto (bioma)
 

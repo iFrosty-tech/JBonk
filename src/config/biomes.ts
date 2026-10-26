@@ -1,13 +1,17 @@
 import type { BiomeDef } from './types';
 
 // Un bioma per progetto. Nomi e clienti sono segnaposto: sostituirli con i progetti reali.
+// Per ora c'è una sola mappa, il quartiere della sede JPanik (Mezzocammino, Roma): tutti i progetti
+// si svolgono lì e cambiano nemici, boss e luce (mattina, notte, tramonto). Senza `map`
+// l'arena torna a essere generata da `terrain` e `props`.
 export const BIOMES: BiomeDef[] = [
   {
     id: 'openspace',
     project: 'Progetto Phoenix',
-    place: 'Open Space',
+    place: 'Mezzocammino',
+    map: 'mezzocammino',
     client: 'Retail SpA',
-    description: 'Moquette grigia, scrivanie condivise e un flusso infinito di ticket.',
+    description: 'Una mattina di sole in Viale Bonelli: i ticket ti aspettano fuori dall\'ufficio.',
     palette: {
       tileA: '#8e9bb0',
       tileB: '#7f8ca3',
@@ -42,9 +46,10 @@ export const BIOMES: BiomeDef[] = [
   {
     id: 'datacenter',
     project: 'Progetto Atlas',
-    place: 'Data Center',
+    place: 'Mezzocammino di notte',
+    map: 'mezzocammino',
     client: 'Logistica Nord',
-    description: 'Rack ronzanti, corridoi freddi e un mainframe che nessuno osa spegnere.',
+    description: 'Il rilascio è stanotte: lampioni accesi, finestre illuminate e bug ovunque.',
     palette: {
       tileA: '#3d4656',
       tileB: '#353d4b',
@@ -76,15 +81,16 @@ export const BIOMES: BiomeDef[] = [
   {
     id: 'banca',
     project: 'Progetto Helios',
-    place: 'Sede del Cliente',
+    place: 'Mezzocammino al tramonto',
+    map: 'mezzocammino',
     client: 'Banca Fidata',
-    description: 'Marmo, colonne e auditor che sbucano da ogni corridoio.',
+    description: 'Luce dorata sulla Colombo e auditor che sbucano da ogni portone.',
     palette: {
       tileA: '#e7dfd0',
       tileB: '#d8cdb8',
       hill: '#bfb29a',
-      sky: '#f2e8d6',
-      fog: '#efe4d0',
+      sky: '#f6c99a',
+      fog: '#efc49c',
       wall: '#b9a98c',
       accent: '#2c6e63',
     },

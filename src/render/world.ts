@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { BiomeDef } from '../config/types';
+import type { NavGrid } from '../game/nav';
 import { fbm, hashNoise, mulberry32, smoothstep } from '../game/random';
+import type { PoiRole } from '../maps/types';
 import { buildProp } from './props';
 
 // Il bioma: terreno a colline con piastrelle (moquette/pavimento), muri perimetrali,
@@ -14,12 +16,51 @@ export interface Collider {
   r: number;
 }
 
-export class World {
+/** Un locale o punto di interesse delle mappe reali; x, z è davanti all'ingresso. */
+export interface Place {
+  id: string;
+  name: string;
+  addr: string;
+  role: PoiRole;
+  icon?: string;
+  x: number;
+  z: number;
+  top: number; // altezza a cui galleggia il segnaposto
+}
+
+/** Ciò che la partita usa del mondo: lo implementano l'arena procedurale (World) e le mappe reali (CityWorld). */
+export interface GameWorld {
+  readonly group: THREE.Group;
+  readonly half: number;
+  /** Posizioni libere riservate agli interattivi (forzieri, macchinette, sala riunioni). */
+  readonly spots: { x: number; z: number }[];
+  /** Dove compare il giocatore e verso dove guarda la camera. */
+  readonly start: { x: number; z: number; yaw: number };
+  readonly places: Place[];
+  /** Griglia per aggirare gli ostacoli grandi (null se bastano le collisioni). */
+  readonly nav: NavGrid | null;
+  /** Pianta per la minimappa: canvas che copre il quadrato [-half, half]. */
+  readonly minimap: { canvas: HTMLCanvasElement; half: number } | null;
+  height(x: number, z: number): number;
+  resolve(p: { x: number; z: number }, r: number): void;
+  /** Nome del luogo per l'HUD (locale o via), null se non c'è. */
+  locate(x: number, z: number): string | null;
+  /** Prima del rendering: la camera "buca" ciò che sta tra lei e il giocatore. */
+  beforeRender(camera: THREE.Camera, target: THREE.Vector3): void;
+  dispose(scene: THREE.Scene): void;
+}
+
+/** Arena procedurale: per i progetti senza una mappa reale (BiomeDef.map). */
+export class World implements GameWorld {
   readonly group = new THREE.Group();
   readonly half: number;
   readonly colliders: Collider[] = [];
   /** Posizioni libere riservate agli interattivi (forzieri, macchinette, sala riunioni). */
   readonly spots: { x: number; z: number }[] = [];
+  readonly start = { x: 0, z: 0, yaw: 0 };
+  readonly places: Place[] = [];
+  readonly nav = null;
+  readonly minimap = null;
   private readonly n: number;
   private readonly heights: Float32Array;
   private readonly grid = new Map<number, number[]>();
@@ -110,6 +151,12 @@ export class World {
         }
       }
   }
+
+  locate(): string | null {
+    return null;
+  }
+
+  beforeRender() {}
 
   dispose(scene: THREE.Scene) {
     scene.remove(this.group);

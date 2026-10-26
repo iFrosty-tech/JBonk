@@ -85,6 +85,8 @@ export interface BiomeDef {
   id: string;
   project: string; // nome del progetto (es. "Progetto Phoenix")
   place: string; // ambientazione (es. "Open Space")
+  /** Mappa reale (src/maps) in cui si svolge il progetto. Senza, l'arena è generata da terrain e props. */
+  map?: string;
   client: string;
   description: string;
   palette: {
