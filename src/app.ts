@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { CHARACTERS } from './config/characters';
 import { BIOMES } from './config/biomes';
+import { WEAPONS, WEAPON_IDS } from './config/weapons';
 import { Audio } from './game/audio';
 import { Game, type GameHooks } from './game/game';
 import { Input } from './game/input';
-import { Atlas } from './render/atlas';
+import type { Atlas } from './render/atlas';
 import { Hud } from './ui/hud';
 import { Screens, type TitleChoice } from './ui/screens';
 
@@ -35,7 +36,6 @@ function saveSelection(v: TitleChoice) {
 
 export class App {
   readonly renderer: THREE.WebGLRenderer;
-  readonly atlas: Atlas;
   readonly input: Input;
   readonly audio = new Audio();
   readonly screens: Screens;
@@ -45,13 +45,15 @@ export class App {
   private last = performance.now();
   private readonly debug = location.hash === '#debug';
 
-  constructor(private readonly root: HTMLElement) {
+  constructor(
+    private readonly root: HTMLElement,
+    readonly atlas: Atlas,
+  ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     const canvas = this.renderer.domElement;
     canvas.className = 'game';
     root.appendChild(canvas);
-    this.atlas = new Atlas();
     this.input = new Input(canvas);
     this.screens = new Screens(root, this.atlas);
 
@@ -156,6 +158,15 @@ export class App {
     if (e.code === 'KeyK') for (const en of g.enemies) g.damageEnemy(en, 1e6, null, 0, 0);
     if (e.code === 'KeyT') g.stageTime += 60;
     if (e.code === 'KeyO') g.gold += 100;
+    if (e.code === 'KeyN') {
+      // aggiunge un'arma che non hai, partendo dalle ultime inserite
+      const id = [...WEAPON_IDS].reverse().find((w) => !g.weapons.some((x) => x.def.id === w));
+      if (id) {
+        g.addWeapon(id);
+        this.hud?.banner(`Arma di test: ${WEAPONS[id].name}`, 'info');
+      }
+    }
+    if (e.code === 'KeyC') g.spawnPickup('card', 15, g.player.x + g.rig.forward.x * 4, g.player.z + g.rig.forward.z * 4);
   };
 
   private resize = () => {

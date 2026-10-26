@@ -152,20 +152,20 @@ export class BillboardBatch {
   }
 }
 
-/** Ombre a disco sotto gli sprite: rendono leggibile la profondità in 2.5D. */
+/** Ombre a disco sotto gli sprite: rendono leggibile la profondità in 2.5D. Con un altro colore fanno da macchie a terra. */
 export class ShadowBatch {
   readonly mesh: THREE.InstancedMesh;
   private n = 0;
   private readonly cap: number;
 
-  constructor(cap: number) {
+  constructor(cap: number, color = 0x0b0e18, opacity = 0.32) {
     this.cap = cap;
-    const geo = new THREE.CircleGeometry(0.5, 14);
+    const geo = new THREE.CircleGeometry(0.5, 20);
     geo.rotateX(-Math.PI / 2);
     const mat = new THREE.MeshBasicMaterial({
-      color: 0x0b0e18,
+      color,
       transparent: true,
-      opacity: 0.32,
+      opacity,
       depthWrite: false,
       polygonOffset: true,
       polygonOffsetFactor: -2,

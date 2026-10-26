@@ -25,6 +25,10 @@ export const TUNING = {
   shrineCount: 3,
   chestBaseCost: 12,
   shrineChargeTime: 2.5,
+  clinicCount: 2, // presidi GPI per progetto
+  clinicStock: 80, // HP che un presidio può erogare
+  clinicRate: 16, // HP al secondo
+  clinicRadius: 3.6,
   stagesToWin: 3,
   rarity: {
     names: ['Bassa', 'Media', 'Alta', 'Bloccante'],

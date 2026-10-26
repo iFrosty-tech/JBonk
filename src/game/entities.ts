@@ -69,7 +69,7 @@ export interface Projectile {
   alive: boolean;
 }
 
-export type PickupKind = 'xp' | 'gold' | 'heal' | 'magnet';
+export type PickupKind = 'xp' | 'gold' | 'heal' | 'magnet' | 'card';
 
 export interface Pickup {
   kind: PickupKind;
@@ -82,11 +82,12 @@ export interface Pickup {
   pull: number;
   alive: boolean;
   frame: Frame;
+  anim: Frame[] | null; // se presente, lo sprite gira in loop
   size: number;
   t: number;
 }
 
-export type InteractKind = 'chest' | 'shrine' | 'altar' | 'portal';
+export type InteractKind = 'chest' | 'shrine' | 'altar' | 'portal' | 'clinic';
 
 export interface Interactable {
   kind: InteractKind;
@@ -94,12 +95,13 @@ export interface Interactable {
   y: number;
   z: number;
   used: boolean;
-  charge: number;
+  charge: number; // macchinetta: secondi di attesa; presidio: HP già erogati
   free: boolean;
 }
 
 export interface Fx {
   frame: Frame;
+  anim: Frame[] | null; // se presente, l'animazione dura quanto l'effetto
   x: number;
   y: number;
   z: number;

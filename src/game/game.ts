@@ -49,6 +49,7 @@ interface FxOpts {
   spin?: number;
   gravity?: number;
   alpha?: number;
+  anim?: boolean; // riproduce tutti i fotogrammi dello sprite nella durata dell'effetto
 }
 
 const tmpPt = { x: 0, z: 0 };
@@ -60,6 +61,7 @@ export class Game {
   readonly solid: BillboardBatch;
   readonly fx: BillboardBatch;
   readonly shadows: ShadowBatch;
+  readonly decals: ShadowBatch; // macchie a terra (pozze di caffè)
   world!: World;
   biome!: BiomeDef;
 
@@ -104,6 +106,7 @@ export class Game {
   private choiceQueue: (() => ChoiceRequest)[] = [];
   private hitFxBudget = 0;
   private readonly frames = new Map<string, Frame>();
+  private readonly anims = new Map<string, Frame[]>();
   private stagesCleared = 0;
 
   constructor(
@@ -120,7 +123,8 @@ export class Game {
     this.solid = new BillboardBatch(atlas, 6000, 'solid');
     this.fx = new BillboardBatch(atlas, 3000, 'fx');
     this.shadows = new ShadowBatch(3000);
-    this.scene.add(this.solid.mesh, this.fx.mesh, this.shadows.mesh);
+    this.decals = new ShadowBatch(128, 0x6b3e1f, 0.55);
+    this.scene.add(this.solid.mesh, this.fx.mesh, this.shadows.mesh, this.decals.mesh);
     this.hash = new SpatialHash(TUNING.arenaHalf, 4, 1024);
     this.biomeIdx = startBiome;
     this.player = {
@@ -139,7 +143,7 @@ export class Game {
     if (this.world) this.world.dispose(this.scene);
     this.biome = BIOMES[this.biomeIdx % BIOMES.length];
     const seed = (Math.random() * 1e9) | 0;
-    const spotCount = 1 + TUNING.shrineCount + TUNING.chestCount;
+    const spotCount = 1 + TUNING.shrineCount + TUNING.clinicCount + TUNING.chestCount;
     this.world = new World(this.scene, this.biome, TUNING.arenaHalf, seed, spotCount);
     this.scene.add(this.world.group);
     this.enemies = [];
@@ -155,12 +159,11 @@ export class Game {
     this.spawnAcc = 0;
     this.eliteT = 0;
     this.swarmsDone.clear();
-    for (const w of this.weapons) w.strikes.length = 0;
 
-    // la sala riunioni è il punto più lontano dal centro
+    // la sala riunioni è il punto più lontano dal centro, poi macchinette e presidi GPI
     const spots = [...this.world.spots].sort((a, b) => Math.hypot(b.x, b.z) - Math.hypot(a.x, a.z));
     spots.forEach((s, i) => {
-      const kind = i === 0 ? 'altar' : i <= TUNING.shrineCount ? 'shrine' : 'chest';
+      const kind = i === 0 ? 'altar' : i <= TUNING.shrineCount ? 'shrine' : i <= TUNING.shrineCount + TUNING.clinicCount ? 'clinic' : 'chest';
       this.interactables.push({ kind, x: s.x, z: s.z, y: this.world.height(s.x, s.z), used: false, charge: 0, free: false });
     });
 
@@ -169,6 +172,7 @@ export class Game {
     p.z = 0;
     p.y = this.world.height(0, 0);
     p.vy = 0;
+    for (const w of this.weapons) w.resetStage(p.x, p.y, p.z);
     this.companion.x = -1.5;
     this.companion.z = 1;
     this.companion.y = p.y + 1;
@@ -183,6 +187,16 @@ export class Game {
       this.frames.set(id, f);
     }
     return f;
+  }
+
+  /** Tutti i fotogrammi di uno sprite animato. */
+  anim(id: string): Frame[] {
+    let a = this.anims.get(id);
+    if (!a) {
+      a = this.atlas.anim(id);
+      this.anims.set(id, a);
+    }
+    return a;
   }
 
   // ---------------------------------------------------------------- statistiche e progressione
@@ -312,7 +326,7 @@ export class Game {
     if (this.fxs.length > 900) return;
     const life = o.life ?? 0.4;
     this.fxs.push({
-      frame: this.frame(id), x, y, z,
+      frame: this.frame(id), anim: o.anim ? this.anim(id) : null, x, y, z,
       vx: o.vx ?? 0, vy: o.vy ?? 0, vz: o.vz ?? 0,
       size0: o.size0 ?? 1, size1: o.size1 ?? o.size0 ?? 1,
       life, max: life, rot: o.rot ?? 0, spin: o.spin ?? 0, gravity: o.gravity ?? 0, alpha: o.alpha ?? 1,
@@ -328,7 +342,7 @@ export class Game {
     }
   }
 
-  private spawnPickup(kind: PickupKind, value: number, x: number, z: number) {
+  spawnPickup(kind: PickupKind, value: number, x: number, z: number) {
     if (kind === 'xp' && this.pickups.length > 380) {
       // troppe gemme: accorpa in una esistente
       const g = this.pickups.find((p) => p.kind === 'xp' && !p.magnet);
@@ -338,12 +352,12 @@ export class Game {
         return;
       }
     }
-    const id = kind === 'xp' ? (value >= 10 ? 'xp3' : value >= 3 ? 'xp2' : 'xp1') : kind === 'gold' ? 'gold' : kind === 'heal' ? 'pizza' : 'magnet';
-    const size = kind === 'xp' ? (value >= 10 ? 1.0 : 0.75) : kind === 'gold' ? 0.9 : 1.2;
+    const id = kind === 'xp' ? (value >= 10 ? 'xp3' : value >= 3 ? 'xp2' : 'xp1') : kind === 'gold' ? 'gold' : kind === 'heal' ? 'pizza' : kind === 'card' ? 'soldo' : 'magnet';
+    const size = kind === 'xp' ? (value >= 10 ? 1.0 : 0.75) : kind === 'gold' ? 0.9 : kind === 'card' ? 1.7 : 1.2;
     this.pickups.push({
       kind, value, x: x + (Math.random() - 0.5) * 0.8, z: z + (Math.random() - 0.5) * 0.8,
       y: this.world.height(x, z) + 1, vy: 5, magnet: false, pull: 0, alive: true,
-      frame: this.frame(id), size, t: Math.random() * 6,
+      frame: this.frame(id), anim: kind === 'card' ? this.anim(id) : null, size, t: Math.random() * 6,
     });
   }
 
@@ -429,12 +443,14 @@ export class Game {
       const r = Math.random();
       if (r < 0.004) this.spawnPickup('heal', 1, e.x, e.z);
       else if (r < 0.006) this.spawnPickup('magnet', 1, e.x, e.z);
+      else if (r < 0.0075) this.spawnPickup('card', 10, e.x, e.z);
     }
     this.spawnFx('puff', e.x, e.y, e.z, { size0: e.height * 0.8, size1: e.height * 1.4, life: 0.3, alpha: 0.8 });
     if (e.elite) {
       // il guardiano lascia un forziere gratuito
       this.interactables.push({ kind: 'chest', x: e.x, z: e.z, y: this.world.height(e.x, e.z), used: false, charge: 0, free: true });
       this.spawnPickup('heal', 1, e.x + 1.5, e.z);
+      this.spawnPickup('card', 15, e.x - 1.5, e.z);
       this.hooks.banner(`${e.def.name} sconfitto: ordine d'acquisto gratuito!`, 'good');
     }
     if (e.boss) {
@@ -446,7 +462,8 @@ export class Game {
       tmpPt.z = e.z;
       this.world.resolve(tmpPt, 2);
       this.interactables.push({ kind: 'portal', x: tmpPt.x, z: tmpPt.z, y: this.world.height(tmpPt.x, tmpPt.z), used: false, charge: 0, free: true });
-      for (let i = 0; i < 6; i++) this.spawnPickup('gold', 10, e.x, e.z);
+      for (let i = 0; i < 4; i++) this.spawnPickup('gold', 10, e.x, e.z);
+      for (let i = 0; i < 2; i++) this.spawnPickup('card', 20, e.x + (i ? 2 : -2), e.z);
       const last = this.stagesCleared + 1 >= TUNING.stagesToWin;
       this.hooks.banner(last ? 'Progetto consegnato! Prendi l\'ascensore per chiudere.' : 'Boss sconfitto! L\'ascensore porta al prossimo progetto.', 'good');
     }
@@ -863,6 +880,14 @@ export class Game {
         this.addNumber(this.player.x, this.player.y + 2.2, this.player.z, '+HP', false, '#5dfd8a');
         this.audio.play('coin');
         break;
+      case 'card': {
+        const v = Math.round(k.value * this.stats.goldGain);
+        this.gold += v;
+        this.addNumber(this.player.x, this.player.y + 2.4, this.player.z, `+${v} €`, true, '#ffd23f');
+        this.hooks.banner(`Carta Soldo: spesa approvata, +${v} € di budget!`, 'good');
+        this.audio.play('coin');
+        break;
+      }
       case 'magnet':
         for (const o of this.pickups) if (o.kind === 'xp') o.magnet = true;
         this.hooks.banner('Wi-Fi aziendale: tutta l\'esperienza arriva a te!', 'good');
@@ -895,6 +920,10 @@ export class Game {
         } else it.charge = Math.max(0, it.charge - dt);
         continue;
       }
+      if (it.kind === 'clinic') {
+        if (d < TUNING.clinicRadius) this.useClinic(it, dt);
+        continue;
+      }
       if (it.kind === 'portal' && d < 1.8) {
         this.usePortal(it);
         return;
@@ -924,6 +953,30 @@ export class Game {
       best.used = true;
       this.spawnBoss();
     } else if (best.kind === 'portal') this.usePortal(best);
+  }
+
+  /** Presidio GPI: cura finché resti vicino, fino a esaurire la scorta. */
+  private useClinic(it: Interactable, dt: number) {
+    const p = this.player;
+    const stock = TUNING.clinicStock;
+    const left = () => Math.round(100 * (1 - it.charge / stock));
+    const missing = this.stats.maxHp - p.hp;
+    if (missing < 0.5) {
+      this.prompt = `Presidio GPI · The Healthcare Partner — sei in forma (scorta ${left()}%)`;
+      return;
+    }
+    const v = Math.min(TUNING.clinicRate * dt, missing, stock - it.charge);
+    this.heal(v);
+    it.charge += v;
+    this.prompt = `Presidio GPI — cure in corso… scorta ${left()}%`;
+    if (Math.random() < dt * 6) {
+      this.spawnFx('heal_plus', p.x + (Math.random() - 0.5) * 1.6, p.y + 0.8 + Math.random(), p.z + (Math.random() - 0.5) * 1.6, { size0: 0.6, size1: 0.3, life: 0.8, vy: 2.4 });
+    }
+    if (it.charge >= stock - 0.01) {
+      it.used = true;
+      this.hooks.banner('Presidio GPI esaurito: il prossimo è in un altro progetto', 'info');
+      this.audio.play('open');
+    }
   }
 
   private usePortal(it: Interactable) {
@@ -962,6 +1015,7 @@ export class Game {
     solid.begin();
     fx.begin();
     shadows.begin();
+    this.decals.begin();
     const p = this.player;
     const t = this.runTime;
 
@@ -983,26 +1037,37 @@ export class Game {
     for (const h of this.hostile) solid.push(h.frame, h.x, h.y - h.size * 0.5, h.z, h.size, 1, 0, 1, h.rot);
     for (const k of this.pickups) {
       const hover = k.magnet ? 0 : 0.25 + Math.sin(k.t * 4) * 0.15;
-      solid.push(k.frame, k.x, k.y + hover, k.z, k.size, 1, 0, 1, k.kind === 'xp' ? Math.sin(k.t * 3) * 0.3 : 0);
+      const f = k.anim ? k.anim[Math.floor(k.t * 11) % k.anim.length] : k.frame;
+      solid.push(f, k.x, k.y + hover, k.z, k.size, 1, 0, 1, k.kind === 'xp' ? Math.sin(k.t * 3) * 0.3 : 0);
+      if (k.kind === 'card') shadows.push(k.x, this.world.height(k.x, k.z), k.z, 0.8);
     }
     for (const it of this.interactables) {
-      const id = it.kind === 'chest' ? (it.used ? 'chest_open' : 'chest') : it.kind === 'shrine' ? (it.used ? 'shrine_off' : 'shrine') : it.kind;
-      const h = it.kind === 'chest' ? 2.2 : it.kind === 'portal' ? 6 : 5;
-      const glow = !it.used && (it.kind === 'chest' && it.free) ? 0.25 + Math.sin(t * 6) * 0.25 : it.kind === 'shrine' && it.charge > 0 && !it.used ? 0.15 + Math.sin(t * 20) * 0.12 : 0;
-      solid.push(this.frame(id), it.x, it.y, it.z, h, 1, glow);
+      let f: Frame;
+      if (it.kind === 'clinic') {
+        const a = this.anim('gpi');
+        f = it.used ? this.frame('gpi_off') : a[Math.floor(t * 9 + Math.abs(it.x)) % a.length];
+      } else f = this.frame(it.kind === 'chest' ? (it.used ? 'chest_open' : 'chest') : it.kind === 'shrine' ? (it.used ? 'shrine_off' : 'shrine') : it.kind);
+      const h = it.kind === 'chest' ? 2.2 : it.kind === 'portal' ? 6 : it.kind === 'clinic' ? 5.4 : 5;
+      let glow = 0;
+      if (!it.used && it.kind === 'chest' && it.free) glow = 0.25 + Math.sin(t * 6) * 0.25;
+      else if (!it.used && it.kind === 'shrine' && it.charge > 0) glow = 0.15 + Math.sin(t * 20) * 0.12;
+      else if (!it.used && it.kind === 'clinic' && p.hp < this.stats.maxHp && Math.hypot(it.x - p.x, it.z - p.z) < TUNING.clinicRadius) glow = 0.12 + Math.sin(t * 9) * 0.1;
+      solid.push(f, it.x, it.y, it.z, h, 1, glow);
       shadows.push(it.x, it.y, it.z, it.kind === 'portal' ? 6 : 2.6);
     }
     for (const w of this.weapons) drawWeapon(w, this);
     for (const f of this.fxs) {
       const k = 1 - f.life / f.max;
       const size = f.size0 + (f.size1 - f.size0) * k;
-      fx.push(f.frame, f.x, f.y - size * 0.5, f.z, size, 1, 0, f.alpha * Math.min(1, (f.life / f.max) * 2), f.rot);
+      const frame = f.anim ? f.anim[Math.min(f.anim.length - 1, Math.floor(k * f.anim.length))] : f.frame;
+      fx.push(frame, f.x, f.y - size * 0.5, f.z, size, 1, 0, f.alpha * Math.min(1, (f.life / f.max) * 2), f.rot);
     }
 
     const fog = this.scene.fog as THREE.FogExp2;
     solid.end(this.rig.right, fog);
     fx.end(this.rig.right, fog);
     shadows.end();
+    this.decals.end();
     renderer.render(this.scene, this.camera);
   }
 
@@ -1022,5 +1087,6 @@ export class Game {
       (m.material as THREE.Material).dispose();
     }
     this.shadows.mesh.dispose();
+    this.decals.mesh.dispose();
   }
 }

@@ -128,7 +128,7 @@ export interface UpgradeDef {
   int?: boolean;
 }
 
-export type WeaponKind = 'projectile' | 'orbit' | 'aura' | 'radial' | 'strike' | 'chain';
+export type WeaponKind = 'projectile' | 'orbit' | 'aura' | 'radial' | 'strike' | 'chain' | 'minion' | 'lob';
 
 export interface WeaponDef {
   id: string;
@@ -140,6 +140,10 @@ export interface WeaponDef {
   base: WeaponStats;
   upgrades: UpgradeDef[];
   maxLevel: number;
+  /** Altezza a schermo dello sprite (unità mondo, prima del moltiplicatore d'area). */
+  scale?: number;
+  /** Solo 'orbit': gli oggetti in orbita distruggono i proiettili nemici. */
+  blocks?: boolean;
 }
 
 export interface PassiveDef {

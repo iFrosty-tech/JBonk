@@ -1,6 +1,6 @@
 // Effetti sonori sintetizzati con WebAudio: nessun file audio da caricare.
 
-type Sfx = 'hit' | 'pickup' | 'level' | 'hurt' | 'boom' | 'boss' | 'coin' | 'open' | 'shoot';
+type Sfx = 'hit' | 'pickup' | 'level' | 'hurt' | 'boom' | 'boss' | 'coin' | 'open' | 'shoot' | 'block' | 'splash';
 
 export class Audio {
   private ctx: AudioContext | null = null;
@@ -62,6 +62,13 @@ export class Audio {
       case 'boom':
         this.noise(0.3, 0.3);
         this.tone(120, 40, 0.3, 'sine', 0.3);
+        break;
+      case 'block':
+        this.tone(1400, 700, 0.08, 'square', 0.08);
+        break;
+      case 'splash':
+        this.noise(0.16, 0.14);
+        this.tone(340, 140, 0.14, 'sine', 0.14);
         break;
       case 'boss':
         [110, 104, 98].forEach((f, i) => this.tone(f, f, 0.35, 'sawtooth', 0.2, i * 0.3));

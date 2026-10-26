@@ -91,7 +91,7 @@ function passiveCard(g: Game, id: string, rarity: number): Card {
 function fallbackCards(g: Game): Card[] {
   return [
     {
-      icon: 'gold',
+      icon: 'soldo',
       name: 'Rimborso Spese',
       tag: 'Bonus',
       rarity: 0,

@@ -271,13 +271,21 @@ export class Hud {
       const important = it.kind === 'altar' || it.kind === 'portal';
       const q = proj(it.x, it.z, important);
       if (!q) continue;
-      const color = it.kind === 'chest' ? '#ffd23f' : it.kind === 'shrine' ? '#ff8c5a' : it.kind === 'altar' ? '#b48cff' : '#5dfd8a';
+      const color = it.kind === 'chest' ? '#ffd23f' : it.kind === 'shrine' ? '#ff8c5a' : it.kind === 'altar' ? '#b48cff' : it.kind === 'clinic' ? '#ee7d01' : '#5dfd8a';
       ctx.fillStyle = color;
       ctx.strokeStyle = '#10131c';
       ctx.lineWidth = 3;
       ctx.beginPath();
       if (it.kind === 'chest') ctx.rect(q[0] - 7, q[1] - 7, 14, 14);
-      else ctx.arc(q[0], q[1], important ? 11 : 8, 0, Math.PI * 2);
+      else if (it.kind === 'clinic') {
+        // croce del presidio GPI
+        const [x, y] = q;
+        const a = 3.5;
+        const b = 9;
+        const pts = [-a, -b, a, -b, a, -a, b, -a, b, a, a, a, a, b, -a, b, -a, a, -b, a, -b, -a, -a, -a];
+        for (let i = 0; i < pts.length; i += 2) ctx.lineTo(x + pts[i], y + pts[i + 1]);
+        ctx.closePath();
+      } else ctx.arc(q[0], q[1], important ? 11 : 8, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }

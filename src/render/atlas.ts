@@ -1,13 +1,16 @@
 import * as THREE from 'three';
+import { INK, type G, type SpriteDef, circ, ell, line, makeCanvas, path, poly, rr, txt } from './draw';
+import { LOGO_SPRITES, loadLogoImages } from './logos';
 
 // Tutti gli sprite del gioco sono disegnati via codice su un unico canvas (texture atlas).
 // Stile "sagoma di cartone": forma piena + bordo bianco + filo scuro, come le standee da ufficio.
 // Sostituire uno sprite = cambiare la sua funzione di disegno (o, più avanti, caricare un PNG).
+// Gli sprite con `frames: n` sono animati: ogni fotogramma ha la sua cella (vedi Atlas.anim).
+// I loghi di tecnologie e clienti, con le loro animazioni, sono in logos.ts.
 
 const CELL = 128;
 const SIZE = 2048;
 const COLS = SIZE / CELL;
-const INK = '#1d2333';
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
 export interface Frame {
@@ -22,67 +25,8 @@ export interface Frame {
   ch: number;
 }
 
-type G = CanvasRenderingContext2D;
-type DrawFn = (g: G, w: number, h: number) => void;
-interface SpriteDef {
-  id: string;
-  cw: number;
-  ch: number;
-  draw: DrawFn;
-  sticker?: boolean;
-}
+// ---------- primitive di disegno (le altre sono in draw.ts) ----------
 
-// ---------- primitive di disegno ----------
-
-function path(g: G, fill: string, stroke = true, lw = 3.5) {
-  g.fillStyle = fill;
-  g.fill();
-  if (stroke) {
-    g.lineWidth = lw;
-    g.strokeStyle = INK;
-    g.lineJoin = 'round';
-    g.stroke();
-  }
-}
-function rr(g: G, x: number, y: number, w: number, h: number, r: number, fill: string, stroke = true, lw = 3.5) {
-  g.beginPath();
-  g.roundRect(x, y, w, h, r);
-  path(g, fill, stroke, lw);
-}
-function circ(g: G, x: number, y: number, r: number, fill: string, stroke = true, lw = 3.5) {
-  g.beginPath();
-  g.arc(x, y, r, 0, Math.PI * 2);
-  path(g, fill, stroke, lw);
-}
-function ell(g: G, x: number, y: number, rx: number, ry: number, fill: string, stroke = true, rot = 0) {
-  g.beginPath();
-  g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2);
-  path(g, fill, stroke);
-}
-function poly(g: G, pts: number[], fill: string, stroke = true, lw = 3.5) {
-  g.beginPath();
-  g.moveTo(pts[0], pts[1]);
-  for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]);
-  g.closePath();
-  path(g, fill, stroke, lw);
-}
-function line(g: G, pts: number[], color = INK, lw = 3.5) {
-  g.beginPath();
-  g.moveTo(pts[0], pts[1]);
-  for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]);
-  g.lineWidth = lw;
-  g.strokeStyle = color;
-  g.lineCap = 'round';
-  g.lineJoin = 'round';
-  g.stroke();
-}
-function txt(g: G, s: string, x: number, y: number, size: number, color: string, weight = '800', font = 'Arial, Helvetica, sans-serif') {
-  g.font = `${weight} ${size}px ${font}`;
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillStyle = color;
-  g.fillText(s, x, y);
-}
 function emoji(g: G, ch: string, x: number, y: number, size: number) {
   g.font = `${size}px ${EMOJI_FONT}`;
   g.textAlign = 'center';
@@ -118,8 +62,10 @@ interface PersonOpts {
   glasses?: boolean;
   angry?: boolean;
 }
+type Extra = (g: G, w: number, h: number) => void;
+
 /** Personaggio chibi su base 128x128, piedi a y≈122, rivolto a destra. */
-function person(g: G, o: PersonOpts, extraBehind?: DrawFn, extraFront?: DrawFn) {
+function person(g: G, o: PersonOpts, extraBehind?: Extra, extraFront?: Extra) {
   if (extraBehind) extraBehind(g, 128, 128);
   if (o.hairStyle === 'long') rr(g, 38, 22, 42, 52, 18, o.hair);
   rr(g, 51, 92, 11, 24, 4, o.legs);
@@ -764,22 +710,17 @@ function coffeeMachine(g: G, on: boolean) {
 
 // ---------- costruzione dell'atlas ----------
 
-function makeCanvas(w: number, h: number) {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  return c;
-}
-
 /** Dilata la sagoma e la colora: crea il bordo "adesivo". */
-function silhouette(src: HTMLCanvasElement, color: string, r: number) {
+function silhouette(src: HTMLCanvasElement, color: string, r: number, fine = false) {
   const t = makeCanvas(src.width, src.height);
   const tg = t.getContext('2d')!;
-  const steps = 16;
-  for (let i = 0; i < steps; i++) {
-    const a = (i / steps) * Math.PI * 2;
-    tg.drawImage(src, Math.cos(a) * r, Math.sin(a) * r);
-  }
+  // con le forme sottili (punte, filetti) servono più copie, altrimenti il bordo si sfrangia
+  const rings = fine ? [[r, 32], [r * 0.55, 16]] : [[r, 16]];
+  for (const [rad, steps] of rings)
+    for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * Math.PI * 2;
+      tg.drawImage(src, Math.cos(a) * rad, Math.sin(a) * rad);
+    }
   tg.globalCompositeOperation = 'source-in';
   tg.fillStyle = color;
   tg.fillRect(0, 0, t.width, t.height);
@@ -790,22 +731,33 @@ export class Atlas {
   readonly canvas: HTMLCanvasElement;
   readonly texture: THREE.CanvasTexture;
   private frames = new Map<string, Frame>();
+  private anims = new Map<string, Frame[]>();
   private dataUrl = '';
 
-  constructor() {
+  /** Carica le immagini dei loghi e poi disegna l'atlas. */
+  static async create(): Promise<Atlas> {
+    await loadLogoImages();
+    return new Atlas();
+  }
+
+  private constructor() {
     this.canvas = makeCanvas(SIZE, SIZE);
     const g = this.canvas.getContext('2d')!;
-    // impaccamento a scaffali: prima gli sprite alti
-    const order = [...sprites].sort((a, b) => b.ch - a.ch || b.cw - a.cw);
+    // ogni fotogramma occupa una cella; impaccamento a scaffali, prima gli sprite alti
+    const all = [...sprites, ...LOGO_SPRITES];
+    const order = all
+      .flatMap((s) => Array.from({ length: s.frames ?? 1 }, (_, i) => ({ s, i })))
+      .sort((a, b) => b.s.ch - a.s.ch || b.s.cw - a.s.cw);
     let cx = 0;
     let cy = 0;
     let rowH = 0;
-    for (const s of order) {
+    for (const { s, i } of order) {
       if (cx + s.cw > COLS) {
         cx = 0;
         cy += rowH;
         rowH = 0;
       }
+      if (cy + s.ch > COLS) throw new Error(`Atlas pieno: non c'è spazio per ${s.id} (aumentare SIZE)`);
       const w = s.cw * CELL;
       const h = s.ch * CELL;
       const tmp = makeCanvas(w, h);
@@ -814,17 +766,17 @@ export class Atlas {
       const m = 8;
       tg.translate(m, m);
       tg.scale((w - m * 2) / w, (h - m * 2) / h);
-      s.draw(tg, w, h);
+      s.draw(tg, w, h, i, s.frames ?? 1);
       const px = cx * CELL;
       const py = cy * CELL;
       if (s.sticker === false) {
         g.drawImage(tmp, px, py);
       } else {
-        g.drawImage(silhouette(tmp, INK, 7), px, py);
-        g.drawImage(silhouette(tmp, '#ffffff', 5), px, py);
+        g.drawImage(silhouette(tmp, INK, 7, s.fine), px, py);
+        g.drawImage(silhouette(tmp, '#ffffff', 5, s.fine), px, py);
         g.drawImage(tmp, px, py);
       }
-      this.frames.set(s.id, {
+      const f: Frame = {
         u0: px / SIZE,
         u1: (px + w) / SIZE,
         v1: 1 - py / SIZE,
@@ -834,7 +786,11 @@ export class Atlas {
         cy,
         cw: s.cw,
         ch: s.ch,
-      });
+      };
+      if (i === 0) this.frames.set(s.id, f);
+      let list = this.anims.get(s.id);
+      if (!list) this.anims.set(s.id, (list = []));
+      list[i] = f;
       cx += s.cw;
       rowH = Math.max(rowH, s.ch);
     }
@@ -844,10 +800,18 @@ export class Atlas {
     this.texture.needsUpdate = true;
   }
 
+  /** Primo fotogramma dello sprite (per gli sprite statici è l'unico). */
   get(id: string): Frame {
     const f = this.frames.get(id);
     if (!f) throw new Error(`Sprite mancante: ${id}`);
     return f;
+  }
+
+  /** Tutti i fotogrammi dell'animazione, in ordine. */
+  anim(id: string): Frame[] {
+    const a = this.anims.get(id);
+    if (!a) throw new Error(`Sprite mancante: ${id}`);
+    return a;
   }
 
   /** CSS per mostrare uno sprite come icona HTML di lato `px`. */

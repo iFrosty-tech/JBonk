@@ -97,6 +97,59 @@ const list: WeaponDef[] = [
       { stat: 'cooldown', amount: -0.1, mode: 'mul', label: 'Cooldown' },
     ],
   },
+  {
+    id: 'claude',
+    name: 'Claude Code',
+    description: 'Un agente che corre dai nemici e li sistema da solo. Salendo di livello arrivano i subagenti.',
+    kind: 'minion',
+    icon: 'claude',
+    sprite: 'claude', // camminata; usa anche claude_idle e claude_hit
+    scale: 1.2,
+    maxLevel: 10,
+    base: { damage: 15, cooldown: 0.6, count: 1, area: 1, speed: 13, pierce: 0, duration: 1, range: 18, knockback: 0.6 },
+    upgrades: [
+      { stat: 'damage', amount: 5, mode: 'add', label: 'Danno' },
+      { stat: 'count', amount: 1, mode: 'add', label: 'Subagenti', int: true },
+      { stat: 'cooldown', amount: -0.1, mode: 'mul', label: 'Cooldown' },
+      { stat: 'speed', amount: 0.15, mode: 'mul', label: 'Velocità' },
+    ],
+  },
+  {
+    id: 'angular',
+    name: 'Scudo Angular',
+    description: 'Scudi che ti girano intorno: respingono i nemici e bloccano i proiettili dei boss.',
+    kind: 'orbit',
+    icon: 'angular',
+    sprite: 'angular',
+    scale: 0.9,
+    blocks: true,
+    maxLevel: 10,
+    base: { damage: 15, cooldown: 0.5, count: 2, area: 1, speed: 2.2, pierce: 0, duration: 1, range: 4.6, knockback: 2.4 },
+    upgrades: [
+      { stat: 'damage', amount: 5, mode: 'add', label: 'Danno' },
+      { stat: 'count', amount: 1, mode: 'add', label: 'Scudi', int: true },
+      { stat: 'area', amount: 0.15, mode: 'mul', label: 'Raggio' },
+      { stat: 'knockback', amount: 0.25, mode: 'mul', label: 'Respinta' },
+    ],
+  },
+  {
+    id: 'java',
+    name: 'Tazza di Java',
+    description: 'Lancia tazze bollenti che lasciano una pozza di caffè ustionante. Write once, burn anywhere.',
+    kind: 'lob',
+    icon: 'java',
+    sprite: 'java', // in volo; il vapore della pozza è java_steam
+    scale: 1.3,
+    maxLevel: 10,
+    base: { damage: 8, cooldown: 2.4, count: 1, area: 1, speed: 1, pierce: 0, duration: 2.5, range: 20, knockback: 0 },
+    upgrades: [
+      { stat: 'damage', amount: 3, mode: 'add', label: 'Danno' },
+      { stat: 'count', amount: 1, mode: 'add', label: 'Tazze', int: true },
+      { stat: 'area', amount: 0.15, mode: 'mul', label: 'Pozza' },
+      { stat: 'duration', amount: 0.2, mode: 'mul', label: 'Durata' },
+      { stat: 'cooldown', amount: -0.1, mode: 'mul', label: 'Cooldown' },
+    ],
+  },
 ];
 
 export const WEAPONS: Record<string, WeaponDef> = Object.fromEntries(list.map((w) => [w.id, w]));
