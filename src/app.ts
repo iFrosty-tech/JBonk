@@ -10,7 +10,7 @@ import { Screens, type TitleChoice } from './ui/screens';
 
 // Collega renderer, input, HUD, schermate e la partita in corso.
 
-const STORE_KEY = 'officebonk:selection';
+const STORE_KEY = 'jbonk:selection';
 
 function loadSelection(): TitleChoice {
   try {

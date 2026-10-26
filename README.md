@@ -1,4 +1,4 @@
-# OfficeBonk — POC
+# JBonk — POC
 
 Survivor-like in 2.5D sullo stile di PokeBonk/Megabonk, a tema ufficio e consulenza IT.
 Gira nel browser, senza installazione per chi gioca.

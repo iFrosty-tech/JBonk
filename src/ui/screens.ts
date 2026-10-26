@@ -128,7 +128,7 @@ export class Screens {
         h(
           'header',
           { class: 'logo' },
-          h('h1', {}, 'OfficeBonk'),
+          h('h1', {}, 'JBonk'),
           h('p', {}, `Sopravvivi alla giornata lavorativa: dalle 9:00 alle 18:00 chiudi ticket, sali di livello e batti il boss del progetto. Consegna ${TUNING.stagesToWin} progetti di fila per vincere.`),
         ),
         h('section', { class: 'step' }, h('h2', {}, '1 · Chi timbra oggi'), chars),

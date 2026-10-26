@@ -7,7 +7,7 @@ mkdirSync('artifact', { recursive: true });
 copyFileSync('dist/game.js', 'artifact/game.js');
 writeFileSync(
   'artifact/index.html',
-  `<title>OfficeBonk</title>
+  `<title>JBonk</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

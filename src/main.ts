@@ -8,4 +8,4 @@ document.head.appendChild(style);
 const root = document.getElementById('app')!;
 const app = new App(root);
 // accessibile dalla console (e dai test automatici)
-(window as unknown as { officebonk: App }).officebonk = app;
+(window as unknown as { jbonk: App }).jbonk = app;
