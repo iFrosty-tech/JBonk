@@ -1,0 +1,103 @@
+import type { WeaponDef } from './types';
+
+const list: WeaponDef[] = [
+  {
+    id: 'duck',
+    name: 'Paperella di Gomma',
+    description: 'Lancia paperelle al nemico più vicino. Il rubber duck debugging funziona.',
+    kind: 'projectile',
+    icon: 'duck',
+    sprite: 'duck',
+    maxLevel: 10,
+    base: { damage: 18, cooldown: 0.75, count: 1, area: 1, speed: 24, pierce: 1, duration: 1.4, range: 30, knockback: 0.8 },
+    upgrades: [
+      { stat: 'damage', amount: 5, mode: 'add', label: 'Danno' },
+      { stat: 'count', amount: 1, mode: 'add', label: 'Paperelle', int: true },
+      { stat: 'pierce', amount: 1, mode: 'add', label: 'Perforazione', int: true },
+      { stat: 'cooldown', amount: -0.1, mode: 'mul', label: 'Cooldown' },
+      { stat: 'area', amount: 0.2, mode: 'mul', label: 'Dimensione' },
+    ],
+  },
+  {
+    id: 'slides',
+    name: 'Slide PowerPoint',
+    description: 'Slide che orbitano intorno a te. Nessuno sopravvive a 80 slide.',
+    kind: 'orbit',
+    icon: 'slide',
+    sprite: 'slide',
+    maxLevel: 10,
+    base: { damage: 13, cooldown: 0.4, count: 3, area: 1, speed: 2.8, pierce: 0, duration: 1, range: 3.4, knockback: 1.2 },
+    upgrades: [
+      { stat: 'damage', amount: 4, mode: 'add', label: 'Danno' },
+      { stat: 'count', amount: 1, mode: 'add', label: 'Slide', int: true },
+      { stat: 'area', amount: 0.15, mode: 'mul', label: 'Raggio' },
+      { stat: 'speed', amount: 0.15, mode: 'mul', label: 'Velocità rotazione' },
+    ],
+  },
+  {
+    id: 'firewall',
+    name: 'Firewall',
+    description: 'Un anello di fuoco che brucia chiunque entri. Porta 443 esclusa.',
+    kind: 'aura',
+    icon: 'ic_firewall',
+    sprite: 'flame',
+    maxLevel: 10,
+    base: { damage: 9, cooldown: 0.5, count: 1, area: 1, speed: 1, pierce: 0, duration: 1, range: 4.4, knockback: 0.3 },
+    upgrades: [
+      { stat: 'damage', amount: 3, mode: 'add', label: 'Danno' },
+      { stat: 'area', amount: 0.15, mode: 'mul', label: 'Raggio' },
+      { stat: 'cooldown', amount: -0.08, mode: 'mul', label: 'Frequenza' },
+    ],
+  },
+  {
+    id: 'replyall',
+    name: 'Rispondi a Tutti',
+    description: 'Una raffica di email in tutte le direzioni. Nessuno è al sicuro.',
+    kind: 'radial',
+    icon: 'mail',
+    sprite: 'mail',
+    maxLevel: 10,
+    base: { damage: 11, cooldown: 2.0, count: 6, area: 1, speed: 17, pierce: 1, duration: 1.3, range: 0, knockback: 0.6 },
+    upgrades: [
+      { stat: 'damage', amount: 4, mode: 'add', label: 'Danno' },
+      { stat: 'count', amount: 2, mode: 'add', label: 'Destinatari', int: true },
+      { stat: 'cooldown', amount: -0.1, mode: 'mul', label: 'Cooldown' },
+      { stat: 'pierce', amount: 1, mode: 'add', label: 'Perforazione', int: true },
+    ],
+  },
+  {
+    id: 'deploy',
+    name: 'Deploy di Venerdì',
+    description: 'Esplosioni casuali sui nemici vicini. Cosa mai potrebbe andare storto?',
+    kind: 'strike',
+    icon: 'rocket',
+    sprite: 'boom',
+    maxLevel: 10,
+    base: { damage: 36, cooldown: 2.4, count: 1, area: 1, speed: 1, pierce: 0, duration: 0.6, range: 22, knockback: 2 },
+    upgrades: [
+      { stat: 'damage', amount: 10, mode: 'add', label: 'Danno' },
+      { stat: 'count', amount: 1, mode: 'add', label: 'Esplosioni', int: true },
+      { stat: 'area', amount: 0.15, mode: 'mul', label: 'Raggio esplosione' },
+      { stat: 'cooldown', amount: -0.1, mode: 'mul', label: 'Cooldown' },
+    ],
+  },
+  {
+    id: 'stackoverflow',
+    name: 'Copia da Stack Overflow',
+    description: 'Una scarica che rimbalza tra i nemici. Funziona, non chiedere perché.',
+    kind: 'chain',
+    icon: 'ic_stack',
+    sprite: 'spark',
+    maxLevel: 10,
+    base: { damage: 18, cooldown: 1.5, count: 1, area: 1, speed: 1, pierce: 3, duration: 1, range: 18, knockback: 0.4 },
+    upgrades: [
+      { stat: 'damage', amount: 5, mode: 'add', label: 'Danno' },
+      { stat: 'pierce', amount: 1, mode: 'add', label: 'Rimbalzi', int: true },
+      { stat: 'count', amount: 1, mode: 'add', label: 'Scariche', int: true },
+      { stat: 'cooldown', amount: -0.1, mode: 'mul', label: 'Cooldown' },
+    ],
+  },
+];
+
+export const WEAPONS: Record<string, WeaponDef> = Object.fromEntries(list.map((w) => [w.id, w]));
+export const WEAPON_IDS = list.map((w) => w.id);
