@@ -2,25 +2,25 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { BiomeDef } from '../config/types';
 import { NavGrid } from '../game/nav';
-import { AREA_KINDS, type AreaKind, type MapData, type MapPoi, type Poly, type Ring } from '../maps/types';
+import { AREA_KINDS, type AreaKind, type MapBuilding, type MapData, type MapPoi, type Poly, type Ring } from '../maps/types';
 import type { Atlas } from './atlas';
+import { COURT_TYPES, courtTexture, FACADES, facadeTexture, SHOP_BAY, shopTexture, tileTexture, windscreenTexture } from './facades';
 import type { Collider, GameWorld, Place } from './world';
 
 // Una mappa reale (vedi scripts/map/build_map.py): il terreno è fatto di strati piatti
-// disegnati uno sopra l'altro (prati, parchi, marciapiedi, asfalto, strisce), poi edifici
-// estrusi alle altezze vere, alberi, lampioni, fermate e le insegne dei locali.
-// I palazzi bloccano il passaggio (collisioni sui lati) e la navigazione dei nemici.
+// disegnati uno sopra l'altro (il suolo col colore misurato dal satellite, marciapiedi, asfalto,
+// strisce), poi edifici estrusi alle altezze vere con facciate, balconi e tetti nello stile del
+// quartiere, gli alberi veri (posizione, altezza e chioma), i campi sportivi, lampioni, fermate
+// e le insegne dei locali. I palazzi bloccano il passaggio (collisioni sui lati) e la navigazione
+// dei nemici.
 
 const D = 0.1; // i dati sono in decimi di unità
 const NAV_CELL = 2;
 
-const GROUND = '#aea873'; // prato secco, il colore di fondo dell'Agro romano
-const AREA: Record<AreaKind, string> = {
-  res: '#a7ad7b',
-  farm: '#c2b27a',
-  green: '#86ad5c',
-  forest: '#5f8a47',
-  pitch: '#4f9a52',
+const GROUND = '#aea873'; // prato secco, il colore di fondo dell'Agro romano (fuori dalla mappa)
+/** Strati disegnati col loro colore. Prati, parchi, giardini e campi incolti hanno il colore misurato (tint). */
+const AREA: Partial<Record<AreaKind, string>> = {
+  pitch: '#6f8f5a',
   plaza: '#d6cdbb',
   parking: '#6c6f75',
   water: '#3fa2d8',
@@ -28,12 +28,12 @@ const AREA: Record<AreaKind, string> = {
   walk: '#c8c2b6',
   road: '#4b4e54',
 };
-const WALLS = ['#eadbc0', '#e4c79c', '#d8ab7d', '#cf9573', '#efe9de', '#dccdb4', '#c2876a', '#e7d3a9'];
-const KIND_WALL: Record<number, string> = { 2: '#e8cf98', 3: '#ece4d4', 4: '#9aa1aa' };
-const OFFICE_WALL = '#c9d5e2';
-const ROOFS = ['#9d958a', '#8f877c', '#a8a196', '#857c72'];
-const BAY = 3.2; // larghezza di una finestra (unità)
-const FLOOR = 2.6; // altezza di un piano (unità)
+/** Tetti, nello stesso ordine di ROOF in build_map.py. */
+const ROOF = { flat: 0, tiles: 1, dome: 2, canopy: 3, sheet: 4 } as const;
+const GF = 3.6; // altezza del piano terra con i negozi (4,5 m)
+const STONE = '#e6e0d4'; // rivestimento dei pilastri delle vetrine
+const SLAB = '#dcd8cf'; // solette dei balconi
+const SUN_SHADOW = 0.85; // allungamento delle ombre, come in build_map.py
 
 /** Stile delle insegne: sfondo, testo e un eventuale disegno a sinistra. */
 interface SignStyle {
@@ -116,30 +116,125 @@ function merge(...geos: THREE.BufferGeometry[]) {
   return mergeGeometries(flat)!;
 }
 
+/** Accumula triangoli con normale, uv e colore: diventa una sola geometria (una draw call). */
+class Geo {
+  readonly pos: number[] = [];
+  readonly nor: number[] = [];
+  readonly uv: number[] = [];
+  readonly col: number[] = [];
+  readonly bid: number[] = [];
+  /** Edificio a cui appartengono i vertici aggiunti da qui in poi (vedi cutaway). */
+  id = -1;
+
+  vert(x: number, y: number, z: number, nx: number, ny: number, nz: number, u: number, v: number, c: THREE.Color) {
+    this.pos.push(x, y, z);
+    this.nor.push(nx, ny, nz);
+    this.uv.push(u, v);
+    this.col.push(c.r, c.g, c.b);
+    this.bid.push(this.id);
+  }
+
+  /** Aggiunge una primitiva di three.js già posizionata, tutta di un colore. */
+  add(g: THREE.BufferGeometry, c: THREE.Color) {
+    const f = g.index ? g.toNonIndexed() : g;
+    const p = f.getAttribute('position');
+    const n = f.getAttribute('normal');
+    const u = f.getAttribute('uv');
+    for (let i = 0; i < p.count; i++) this.vert(p.getX(i), p.getY(i), p.getZ(i), n.getX(i), n.getY(i), n.getZ(i), u ? u.getX(i) : 0, u ? u.getY(i) : 0, c);
+  }
+
+  /** Scatola lunga `l` (lungo l'angolo `a` nel piano), alta `h`, profonda `d`, con la base a quota y. */
+  box(x: number, y: number, z: number, l: number, h: number, d: number, a: number, c: THREE.Color, tiltX = 0) {
+    const g = new THREE.BoxGeometry(l, h, d);
+    if (tiltX) g.rotateX(tiltX);
+    g.translate(0, h / 2, 0).rotateY(-a).translate(x, y, z);
+    this.add(g, c);
+  }
+
+  /** Muro verticale da (ax, az) a (bx, bz) tra y0 e y1, rivolto verso (nx, nz). */
+  wall(ax: number, az: number, bx: number, bz: number, y0: number, y1: number, nx: number, nz: number, u0: number, u1: number, v0: number, v1: number, c: THREE.Color) {
+    const q = [
+      [ax, y0, az, u0, v0],
+      [bx, y0, bz, u1, v0],
+      [bx, y1, bz, u1, v1],
+      [ax, y1, az, u0, v1],
+    ];
+    const keep = nx * -(bz - az) + nz * (bx - ax) > 0;
+    for (const o of keep ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2]) this.vert(q[o][0], q[o][1], q[o][2], nx, 0, nz, q[o][3], q[o][4], c);
+  }
+
+  /** Poligono piano (a ventaglio) con la normale calcolata; `up` gira le facce verso l'alto. uv dalla funzione. */
+  face(pts: number[][], c: THREE.Color, uv: (p: number[]) => [number, number], up = true) {
+    const [a, b, d] = pts;
+    const n = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).cross(new THREE.Vector3(d[0] - a[0], d[1] - a[1], d[2] - a[2])).normalize();
+    if (up !== n.y >= 0) {
+      pts = [...pts].reverse();
+      n.negate();
+    }
+    for (let k = 1; k + 1 < pts.length; k++)
+      for (const p of [pts[0], pts[k], pts[k + 1]]) {
+        const [u, v] = uv(p);
+        this.vert(p[0], p[1], p[2], n.x, n.y, n.z, u, v, c);
+      }
+  }
+
+  /** Poligono orizzontale (con buchi) a quota y, rivolto in su (o in giù). */
+  flat(rings: Float32Array[], y: number, c: THREE.Color, down = false) {
+    const pos: number[] = [];
+    triangulate(rings, y, pos);
+    for (let k = 0; k < pos.length; k += 9) {
+      const tri = down ? [6, 3, 0] : [0, 3, 6];
+      for (const o of tri) this.vert(pos[k + o], pos[k + o + 1], pos[k + o + 2], 0, down ? -1 : 1, 0, pos[k + o] * 0.1, pos[k + o + 2] * 0.1, c);
+    }
+  }
+
+  get empty() {
+    return this.pos.length === 0;
+  }
+
+  geometry() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    g.setAttribute('bid', new THREE.Float32BufferAttribute(this.bid, 1));
+    return g;
+  }
+}
+
 /** Uniforms condivisi dai materiali che la camera può "bucare" per non perdere di vista il giocatore. */
 const cutUniforms = {
   uCutCam: { value: new THREE.Vector3() },
   uCutTarget: { value: new THREE.Vector3() },
   uCut: { value: 0 },
+  uInside: { value: -1 }, // edificio in cui è finita la camera: i suoi balconi e parapetti spariscono come i muri
 };
 
-function cutaway<T extends THREE.Material>(mat: T): T {
+/** `perBuilding`: la geometria ha l'attributo `bid` (indice dell'edificio) e sparisce se la camera ci è dentro. */
+function cutaway<T extends THREE.Material>(mat: T, perBuilding = false): T {
+  mat.customProgramCacheKey = () => (perBuilding ? 'cutaway-b' : 'cutaway');
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, cutUniforms);
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vCutPos;').replace(
-      '#include <project_vertex>',
-      `#include <project_vertex>
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vCutPos;${perBuilding ? '\nattribute float bid;\nvarying float vBid;' : ''}`)
+      .replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
       vec4 cutWp = vec4(transformed, 1.0);
       #ifdef USE_INSTANCING
         cutWp = instanceMatrix * cutWp;
       #endif
-      vCutPos = (modelMatrix * cutWp).xyz;`,
-    );
+      vCutPos = (modelMatrix * cutWp).xyz;${perBuilding ? '\n      vBid = bid;' : ''}`,
+      );
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uCutCam;\nuniform vec3 uCutTarget;\nuniform float uCut;\nvarying vec3 vCutPos;')
+      .replace(
+        '#include <common>',
+        `#include <common>\nuniform vec3 uCutCam;\nuniform vec3 uCutTarget;\nuniform float uCut;\nvarying vec3 vCutPos;${perBuilding ? '\nuniform float uInside;\nvarying float vBid;' : ''}`,
+      )
       .replace(
         '#include <clipping_planes_fragment>',
-        `#include <clipping_planes_fragment>
+        `#include <clipping_planes_fragment>${perBuilding ? '\n        if (abs(vBid - uInside) < 0.5) discard;' : ''}
         if (uCut > 0.0) {
           vec3 seg = uCutTarget - uCutCam;
           float t = clamp(dot(vCutPos - uCutCam, seg) / dot(seg, seg), 0.0, 1.0);
@@ -154,66 +249,6 @@ function cutaway<T extends THREE.Material>(mat: T): T {
       );
   };
   return mat;
-}
-
-/** Facciata: 4×4 finestre con persiane; il secondo canvas sono le finestre accese (di notte). */
-function facadeTextures() {
-  const S = 256;
-  const c = document.createElement('canvas');
-  c.width = c.height = S;
-  const g = c.getContext('2d')!;
-  const lit = document.createElement('canvas');
-  lit.width = lit.height = S;
-  const lg = lit.getContext('2d')!;
-  lg.fillStyle = '#000';
-  lg.fillRect(0, 0, S, S);
-  g.fillStyle = '#ffffff';
-  g.fillRect(0, 0, S, S);
-  let seed = 7;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let row = 0; row < 4; row++) {
-    const y = row * 64;
-    g.fillStyle = '#e6e1d8'; // marcapiano
-    g.fillRect(0, y + 58, S, 6);
-    for (let col = 0; col < 4; col++) {
-      const x = col * 64;
-      const shutters = col % 2 === 0;
-      const open = rnd() > 0.35;
-      g.fillStyle = '#f4f1ea';
-      g.fillRect(x + 14, y + 10, 36, 40);
-      g.fillStyle = '#4f6072';
-      g.fillRect(x + 18, y + 14, 28, 34);
-      g.fillStyle = 'rgba(255,255,255,0.25)';
-      g.fillRect(x + 18, y + 14, 8, 34);
-      if (shutters) {
-        // persiane verdi, aperte o socchiuse
-        g.fillStyle = '#5f7d58';
-        if (open) {
-          g.fillRect(x + 4, y + 12, 10, 38);
-          g.fillRect(x + 50, y + 12, 10, 38);
-        } else g.fillRect(x + 18, y + 14, 28, 34);
-        g.fillStyle = 'rgba(0,0,0,0.18)';
-        for (let k = 0; k < 6; k++) g.fillRect(open ? x + 4 : x + 18, y + 16 + k * 6, open ? 56 : 28, 1.5);
-      } else {
-        // balconcino
-        g.fillStyle = '#8e9299';
-        g.fillRect(x + 10, y + 38, 44, 3);
-        for (let k = 0; k < 7; k++) g.fillRect(x + 12 + k * 6.5, y + 38, 2, 12);
-      }
-      if (rnd() < 0.38 && !(shutters && !open)) {
-        lg.fillStyle = rnd() < 0.5 ? '#ffd58a' : '#fff0c8';
-        lg.fillRect(x + 18, y + 14, 28, 34);
-      }
-    }
-  }
-  const mk = (cv: HTMLCanvasElement, srgb: boolean) => {
-    const t = new THREE.CanvasTexture(cv);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 4;
-    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  };
-  return { map: mk(c, true), lit: mk(lit, true) };
 }
 
 /** Rete arancione da cantiere: il confine dell'area di gioco. */
@@ -255,6 +290,7 @@ export class CityWorld implements GameWorld {
   private segs: number[] = [];
   private readonly circles: Collider[] = [];
   private readonly solids: Float32Array[][] = []; // anelli di ogni ostacolo, per il test "dentro"
+  private readonly solidOwner: { b: number; h: number }[] = [];
   private readonly cellSegs = new Map<number, number[]>();
   private readonly cellCircles = new Map<number, number[]>();
   private readonly cellSolids = new Map<number, number[]>();
@@ -285,8 +321,8 @@ export class CityWorld implements GameWorld {
 
     this.buildGround();
     this.buildMarkings();
-    const officeBuilding = startPoi?.building ?? -1;
-    this.buildBuildings(officeBuilding);
+    this.buildCourts();
+    this.buildBuildings();
     this.buildPools();
     this.buildTrees();
     this.buildLamps();
@@ -405,6 +441,15 @@ export class CityWorld implements GameWorld {
     cutUniforms.uCutCam.value.copy(camera.position);
     cutUniforms.uCutTarget.value.copy(target);
     cutUniforms.uCut.value = 4.2;
+    const c = camera.position;
+    let inside = -1;
+    const list = this.cellSolids.get(this.key(Math.floor(c.x / this.gridCell), Math.floor(c.z / this.gridCell)));
+    if (list)
+      for (const i of list) {
+        const info = this.solidOwner[i];
+        if (info.b >= 0 && c.y < info.h + 3 && this.inside(this.solids[i], c.x, c.z)) inside = info.b;
+      }
+    cutUniforms.uInside.value = inside;
   }
 
   dispose(scene: THREE.Scene) {
@@ -436,8 +481,10 @@ export class CityWorld implements GameWorld {
       }
   }
 
-  private addSolid(rings: Float32Array[]) {
+  /** Ostacolo poligonale; `b`, `h`: edificio a cui appartiene (-1 per le piscine) e sua altezza. */
+  private addSolid(rings: Float32Array[], b = -1, h = 0) {
     const idx = this.solids.push(rings) - 1;
+    this.solidOwner.push({ b, h });
     let x0 = Infinity;
     let z0 = Infinity;
     let x1 = -Infinity;
@@ -463,6 +510,12 @@ export class CityWorld implements GameWorld {
   private addCircle(x: number, z: number, r: number) {
     const i = this.circles.push({ x, z, r }) - 1;
     this.addToGrid(this.cellCircles, i, x - r, z - r, x + r, z + r);
+  }
+
+  /** C'è un edificio (o una piscina) in questo punto? */
+  private solidAt(x: number, z: number) {
+    const list = this.cellSolids.get(this.key(Math.floor(x / this.gridCell), Math.floor(z / this.gridCell)));
+    return !!list?.some((i) => this.inside(this.solids[i], x, z));
   }
 
   private inside(rings: Float32Array[], x: number, z: number) {
@@ -516,17 +569,49 @@ export class CityWorld implements GameWorld {
     const base = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: GROUND, depthWrite: false }));
     base.renderOrder = -100;
     this.group.add(base);
+    // il suolo col colore misurato: prati secchi o irrigati, giardini, terra
+    const R = this.renderHalf;
+    const tint = this.tintTexture();
+    const pos = [-R, 0, -R, -R, 0, R, R, 0, R, -R, 0, -R, R, 0, R, R, 0, -R];
+    const g = flatGeometry(pos);
+    const uv: number[] = [];
+    for (let k = 0; k < pos.length; k += 3) uv.push((pos[k] + R) / (2 * R), (pos[k + 2] + R) / (2 * R));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    const soil = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tint, depthWrite: false }));
+    soil.renderOrder = -95;
+    this.group.add(soil);
     AREA_KINDS.forEach((kind, i) => {
       const polys = this.map.areas[kind];
-      if (polys.length) this.addLayer(polys, AREA[kind], -90 + i);
+      const color = AREA[kind];
+      if (color && polys.length) this.addLayer(polys, color, -90 + i);
     });
     // ombre dei palazzi, calcolate in build_map.py con la stessa direzione del sole
-    const pos: number[] = [];
-    for (const p of this.map.shadow) triangulate(p.map(ring), 0, pos);
+    const sh: number[] = [];
+    for (const p of this.map.shadow) triangulate(p.map(ring), 0, sh);
     const mat = new THREE.MeshBasicMaterial({ color: '#10131c', transparent: true, opacity: this.night ? 0.12 : 0.24, depthWrite: false });
-    const mesh = new THREE.Mesh(flatGeometry(pos), mat);
+    const mesh = new THREE.Mesh(flatGeometry(sh), mat);
     mesh.renderOrder = -2;
     this.group.add(mesh);
+  }
+
+  /** Il colore del suolo (celle di 10 m dalla Sentinel-2), filtrato: le celle sfumano l'una nell'altra. */
+  private tintTexture() {
+    const { n, data } = this.map.tint;
+    const bin = atob(data);
+    const px = new Uint8Array(n * n * 4);
+    for (let i = 0; i < n * n; i++) {
+      px[i * 4] = bin.charCodeAt(i * 3);
+      px[i * 4 + 1] = bin.charCodeAt(i * 3 + 1);
+      px[i * 4 + 2] = bin.charCodeAt(i * 3 + 2);
+      px[i * 4 + 3] = 255;
+    }
+    const t = new THREE.DataTexture(px, n, n, THREE.RGBAFormat);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearFilter;
+    t.needsUpdate = true;
+    this.textures.push(t);
+    return t;
   }
 
   private addLayer(polys: Poly[], color: string, order: number) {
@@ -585,79 +670,278 @@ export class CityWorld implements GameWorld {
     this.group.add(mesh);
   }
 
-  private buildBuildings(office: number) {
-    const wp: number[] = [];
-    const wn: number[] = [];
-    const wuv: number[] = [];
-    const wc: number[] = [];
-    const rp: number[] = [];
-    const rc: number[] = [];
-    const col = new THREE.Color();
-    const uScale = 1 / (BAY * 4);
-    const vScale = 1 / (FLOOR * 4);
+  /** Edifici: facciate nello stile del quartiere, vetrine, balconi, tetti, pensiline. */
+  private buildBuildings() {
+    const walls = FACADES.map(() => new Geo());
+    const shops = new Geo();
+    const solid = new Geo(); // tetti piani, cupole, parapetti, balconi, torrini, pensiline, pompe
+    const tiles = new Geo(); // falde in coppi
+    const wallC = new THREE.Color();
+    const stone = new THREE.Color(STONE);
+    // la fascia della pensilina ha il colore dell'insegna (es. il blu del distributore IP)
+    const band = new Map<number, string>();
+    for (const p of this.map.pois) if (p.building !== undefined) band.set(p.building, (SIGN_STYLES[p.id] ?? SIGN_DEFAULT).bg);
+    const fronts: { b: MapBuilding; bi: number; edges: number[][]; g0: number }[] = [];
     this.map.buildings.forEach((b, bi) => {
-      const h = (b[0] as number) * D;
-      const kind = b[1] as number;
-      const rings = (b.slice(2) as Ring[]).map(ring);
-      const hash = (bi * 2654435761) >>> 0;
-      col.set(bi === office ? OFFICE_WALL : (KIND_WALL[kind] ?? WALLS[hash % WALLS.length]));
-      const u0 = (hash % 7) * BAY;
+      const h = b.h * D;
+      const rings = b.rings.map(ring);
+      solid.id = bi;
+      if (b.r === ROOF.canopy) {
+        this.buildCanopy(b, rings, h, band.get(bi), solid);
+        return;
+      }
+      const st = FACADES[b.s] ?? FACADES[0];
+      wallC.setHex(b.wc);
+      const plinth = wallC.clone().multiplyScalar(0.9);
+      const shop = new Set(b.shop ?? []);
+      // il piano terra dei negozi è più alto: i piani sopra partono da lì
+      const gFull = shop.size ? GF : st.floor;
+      const g0 = Math.min(h, gFull);
+      const uS = 1 / (st.bay * 4);
+      const vS = 1 / (st.floor * 4);
+      let u = (((bi * 2654435761) >>> 0) % 7) * st.bay;
+      const edges: number[][] = [];
       rings.forEach((r, ri) => {
         const sign = (ri === 0 ? 1 : -1) * (signedArea(r) > 0 ? 1 : -1);
-        let u = u0;
         const m = r.length;
         for (let k = 0; k < m; k += 2) {
           const ax = r[k];
           const az = r[k + 1];
           const bx = r[(k + 2) % m];
           const bz = r[(k + 3) % m];
-          const dx = bx - ax;
-          const dz = bz - az;
-          const len = Math.hypot(dx, dz);
+          const len = Math.hypot(bx - ax, bz - az);
           if (len < 1e-4) continue;
-          const nx = (sign * dz) / len;
-          const nz = (-sign * dx) / len;
-          const verts = [
-            [ax, 0, az, u, 0],
-            [bx, 0, bz, u + len, 0],
-            [bx, h, bz, u + len, h],
-            [ax, h, az, u, h],
-          ];
-          const keep = nx * -dz + nz * dx > 0;
-          const order = keep ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2];
-          for (const o of order) {
-            const v = verts[o];
-            wp.push(v[0], v[1], v[2]);
-            wn.push(nx, 0, nz);
-            wuv.push(v[3] * uScale, v[4] * vScale);
-            wc.push(col.r, col.g, col.b);
-          }
+          const nx = (sign * (bz - az)) / len;
+          const nz = (-sign * (bx - ax)) / len;
+          if (ri === 0 && shop.has(k / 2)) shops.wall(ax, az, bx, bz, 0, g0, nx, nz, u / (SHOP_BAY * 4), (u + len) / (SHOP_BAY * 4), 0, g0 / GF, stone);
+          else walls[b.s].wall(ax, az, bx, bz, 0, g0, nx, nz, u * uS, (u + len) * uS, 0, (0.25 * g0) / gFull, plinth);
+          if (h > g0) walls[b.s].wall(ax, az, bx, bz, g0, h, nx, nz, u * uS, (u + len) * uS, 0.25, 0.25 + (h - g0) * vS, wallC);
+          if (ri === 0) edges.push([ax, az, bx, bz, nx, nz, len]);
           u += len;
         }
       });
-      const before = rp.length;
-      triangulate(rings, h, rp);
-      const roof = new THREE.Color(kind === 4 ? '#7d848d' : ROOFS[hash % ROOFS.length]);
-      for (let k = before; k < rp.length; k += 3) rc.push(roof.r, roof.g, roof.b);
-      this.addSolid(rings);
+      this.buildRoof(b, bi, rings, h, wallC, solid, tiles);
+      if (st.balconies && h - g0 > 3) fronts.push({ b, bi, edges, g0 });
+      this.addSolid(rings, bi, h);
     });
-    const facade = facadeTextures();
-    this.textures.push(facade.map, facade.lit);
-    const walls = new THREE.BufferGeometry();
-    walls.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
-    walls.setAttribute('normal', new THREE.Float32BufferAttribute(wn, 3));
-    walls.setAttribute('uv', new THREE.Float32BufferAttribute(wuv, 2));
-    walls.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3));
-    const wallMat = cutaway(
-      new THREE.MeshLambertMaterial({
-        vertexColors: true,
-        map: facade.map,
-        emissiveMap: facade.lit,
-        emissive: this.night ? '#ffcf86' : '#000000',
-      }),
-    );
-    const roofMat = cutaway(new THREE.MeshLambertMaterial({ vertexColors: true }));
-    this.group.add(new THREE.Mesh(walls, wallMat), new THREE.Mesh(flatGeometry(rp, rc), roofMat));
+    // balconi con parapetto pieno, uno o due per piano su ogni facciata libera (non sui muri in comune)
+    const slab = new THREE.Color(SLAB);
+    const par = new THREE.Color();
+    for (const { b, bi, edges, g0 } of fronts) {
+      solid.id = bi;
+      const st = FACADES[b.s];
+      const h = b.h * D;
+      if (st.trim) par.set(st.trim);
+      else par.setHex(b.wc);
+      for (const [ax, az, bx, bz, nx, nz, len] of edges) {
+        if (len < 6 || this.solidAt((ax + bx) / 2 + nx * 2, (az + bz) / 2 + nz * 2)) continue;
+        const a = Math.atan2(bz - az, bx - ax);
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        const segs = len < 14 ? [[0.5, 0.62]] : [[0.27, 0.36], [0.73, 0.36]];
+        for (let y = g0; y + 1.6 < h; y += st.floor)
+          for (const [t, f] of segs) {
+            const l = len * f;
+            const cx = ax + (bx - ax) * t + nx * 0.55;
+            const cz = az + (bz - az) * t + nz * 0.55;
+            solid.box(cx, y - 0.16, cz, l, 0.16, 1.1, a, slab);
+            solid.box(cx + nx * 0.5, y, cz + nz * 0.5, l, 0.95, 0.1, a, par);
+            for (const s of [-1, 1]) solid.box(cx + ca * s * (l / 2 - 0.05), y, cz + sa * s * (l / 2 - 0.05), 0.1, 0.95, 1.1, a, par);
+          }
+      }
+    }
+    const tex = FACADES.map((st, i) => facadeTexture(st, 7 + i * 31));
+    const shopTex = shopTexture();
+    const tileTex = tileTexture();
+    this.textures.push(shopTex.map, shopTex.lit, tileTex, ...tex.flatMap((t) => [t.map, t.lit]));
+    const lit = (map: THREE.Texture, emissiveMap: THREE.Texture) =>
+      cutaway(new THREE.MeshLambertMaterial({ vertexColors: true, map, emissiveMap, emissive: this.night ? '#ffffff' : '#000000' }));
+    walls.forEach((g, i) => {
+      if (!g.empty) this.group.add(new THREE.Mesh(g.geometry(), lit(tex[i].map, tex[i].lit)));
+    });
+    if (!shops.empty) this.group.add(new THREE.Mesh(shops.geometry(), lit(shopTex.map, shopTex.lit)));
+    if (!tiles.empty) this.group.add(new THREE.Mesh(tiles.geometry(), cutaway(new THREE.MeshLambertMaterial({ vertexColors: true, map: tileTex }))));
+    this.group.add(new THREE.Mesh(solid.geometry(), cutaway(new THREE.MeshLambertMaterial({ vertexColors: true }), true)));
+  }
+
+  /** Tetto: lastrico solare (parapetto, torrino, pannelli), padiglione in coppi, cupola, lamiera. */
+  private buildRoof(b: MapBuilding, bi: number, rings: Float32Array[], h: number, wallC: THREE.Color, solid: Geo, tiles: Geo) {
+    const rc = new THREE.Color(b.rc);
+    const r = rings[0];
+    const m = r.length;
+    if (b.r === ROOF.dome) {
+      let cx = 0;
+      let cz = 0;
+      for (let k = 0; k < m; k += 2) {
+        cx += r[k];
+        cz += r[k + 1];
+      }
+      cx /= m / 2;
+      cz /= m / 2;
+      let rad = 0;
+      for (let k = 0; k < m; k += 2) rad += Math.hypot(r[k] - cx, r[k + 1] - cz);
+      rad /= m / 2;
+      solid.flat(rings, h, rc);
+      solid.add(new THREE.SphereGeometry(rad, 28, 7, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.36, 1).translate(cx, h, cz), rc);
+      return;
+    }
+    if (b.r === ROOF.tiles && b.hip) {
+      this.hipRoof(b.hip, h, rc, tiles);
+      return;
+    }
+    solid.flat(rings, h, rc);
+    if (b.r === ROOF.sheet) return;
+    const st = FACADES[b.s];
+    const par = st.trim ? new THREE.Color(st.trim) : wallC.clone().multiplyScalar(0.96);
+    let best = 0;
+    let ang = 0;
+    for (const rg of rings) {
+      const n = rg.length;
+      for (let k = 0; k < n; k += 2) {
+        const ax = rg[k];
+        const az = rg[k + 1];
+        const bx = rg[(k + 2) % n];
+        const bz = rg[(k + 3) % n];
+        const len = Math.hypot(bx - ax, bz - az);
+        if (len < 0.05) continue;
+        const a = Math.atan2(bz - az, bx - ax);
+        solid.box((ax + bx) / 2, h, (az + bz) / 2, len + 0.24, 0.7, 0.24, a, par);
+        if (rg === r && len > best) {
+          best = len;
+          ang = a;
+        }
+      }
+    }
+    if (b.s === 3 || b.s === 6) return;
+    // baricentro: lì il torrino delle scale e dell'ascensore
+    let A = 0;
+    let cx = 0;
+    let cz = 0;
+    for (let k = 0; k < m; k += 2) {
+      const x0 = r[k];
+      const z0 = r[k + 1];
+      const x1 = r[(k + 2) % m];
+      const z1 = r[(k + 3) % m];
+      const cr = x0 * z1 - x1 * z0;
+      A += cr;
+      cx += (x0 + x1) * cr;
+      cz += (z0 + z1) * cr;
+    }
+    if (Math.abs(A / 2) < 80) return;
+    cx /= 3 * A;
+    cz /= 3 * A;
+    if (!this.inside(rings, cx, cz)) return;
+    const ca = Math.cos(ang);
+    const sa = Math.sin(ang);
+    const box = par.clone().multiplyScalar(0.97);
+    solid.box(cx, h, cz, 3, 2.4, 2.4, ang, box);
+    solid.box(cx, h + 2.4, cz, 3.3, 0.14, 2.7, ang, new THREE.Color('#9b968d'));
+    const hash = (bi * 40503 + 17) & 0xffff;
+    if (hash % 3 !== 0) {
+      // pannelli solari, rivolti a sud
+      const side = ca >= 0 ? 1 : -1;
+      const panel = new THREE.Color('#27354a');
+      for (let i = -2; i <= 2; i++) {
+        const px = cx + ca * i * 1.3 - sa * 3.4 * side;
+        const pz = cz + sa * i * 1.3 + ca * 3.4 * side;
+        if (this.inside(rings, px - sa * 1.2, pz + ca * 1.2) && this.inside(rings, px + sa * 1.2, pz - ca * 1.2)) solid.box(px, h + 0.35, pz, 1.15, 0.06, 1.8, ang, panel, 0.45 * side);
+      }
+    }
+    const unit = new THREE.Color('#cfd2d4');
+    for (const s of [-1, 1]) {
+      const px = cx + ca * s * 3.2 + sa * 2.4;
+      const pz = cz + sa * s * 3.2 - ca * 2.4;
+      if (this.inside(rings, px, pz)) solid.box(px, h, pz, 0.9, 0.65, 0.55, ang, unit);
+    }
+  }
+
+  /** Tetto a padiglione sul rettangolo della pianta, con la gronda che sporge. */
+  private hipRoof(hip: number[], h: number, rc: THREE.Color, tiles: Geo) {
+    const x = hip[0] * D;
+    const z = hip[1] * D;
+    const a = hip[2] / 1000;
+    const o = 0.4;
+    const L = hip[3] * D + 2 * o;
+    const W = hip[4] * D + 2 * o;
+    const rise = Math.min(4.5, (W / 2) * 0.5); // ~27°
+    const ux = Math.cos(a);
+    const uz = Math.sin(a);
+    const y0 = h - 0.15;
+    const P = (s: number, t: number) => [x + ux * (L / 2) * s - uz * (W / 2) * t, y0, z + uz * (L / 2) * s + ux * (W / 2) * t];
+    const rl = Math.max(0, (L - W) / 2);
+    const top = (s: number) => [x + ux * rl * s, y0 + rise, z + uz * rl * s];
+    const k = Math.hypot(rise, W / 2) / rise / 2;
+    const along = (p: number[]): [number, number] => [((p[0] - x) * ux + (p[2] - z) * uz) / 2, (p[1] - y0) * k];
+    const across = (p: number[]): [number, number] => [(-(p[0] - x) * uz + (p[2] - z) * ux) / 2, (p[1] - y0) * k];
+    tiles.face([P(-1, 1), P(1, 1), top(1), top(-1)], rc, along);
+    tiles.face([P(1, -1), P(-1, -1), top(-1), top(1)], rc, along);
+    tiles.face([P(1, 1), P(1, -1), top(1)], rc, across);
+    tiles.face([P(-1, -1), P(-1, 1), top(-1)], rc, across);
+  }
+
+  /** Pensilina (tettoia, distributore): solo la copertura su pilastri, ci si passa sotto. */
+  private buildCanopy(b: MapBuilding, rings: Float32Array[], h: number, band: string | undefined, solid: Geo) {
+    const t = 0.9;
+    const side = new THREE.Color(band ?? '#d5d9de');
+    solid.flat(rings, h, new THREE.Color(b.rc));
+    solid.flat(rings, h - t, new THREE.Color('#c9cdd2'), true);
+    const r = rings[0];
+    const m = r.length;
+    const sign = signedArea(r) > 0 ? 1 : -1;
+    let best = 0;
+    let ang = 0;
+    for (let k = 0; k < m; k += 2) {
+      const ax = r[k];
+      const az = r[k + 1];
+      const bx = r[(k + 2) % m];
+      const bz = r[(k + 3) % m];
+      const len = Math.hypot(bx - ax, bz - az);
+      if (len < 1e-4) continue;
+      solid.wall(ax, az, bx, bz, h - t, h, (sign * (bz - az)) / len, (-sign * (bx - ax)) / len, 0, 0, 0, 0, side);
+      if (len > best) {
+        best = len;
+        ang = Math.atan2(bz - az, bx - ax);
+      }
+    }
+    // rettangolo orientato sul lato più lungo: i pilastri stanno sul suo asse
+    const ux = Math.cos(ang);
+    const uz = Math.sin(ang);
+    let s0 = Infinity;
+    let s1 = -Infinity;
+    let t0 = Infinity;
+    let t1 = -Infinity;
+    for (let k = 0; k < m; k += 2) {
+      const s = r[k] * ux + r[k + 1] * uz;
+      const q = -r[k] * uz + r[k + 1] * ux;
+      s0 = Math.min(s0, s);
+      s1 = Math.max(s1, s);
+      t0 = Math.min(t0, q);
+      t1 = Math.max(t1, q);
+    }
+    const sm = (s0 + s1) / 2;
+    const tm = (t0 + t1) / 2;
+    const L = s1 - s0;
+    const n = L > 14 ? 3 : L > 7 ? 2 : 1;
+    const pillar = new THREE.Color('#dfe2e6');
+    const island = new THREE.Color('#bfc3c8');
+    const pump = new THREE.Color('#f1f2f4');
+    for (let i = 0; i < n; i++) {
+      const s = n === 1 ? sm : s0 + 3 + (i * (L - 6)) / (n - 1);
+      const px = s * ux - tm * uz;
+      const pz = s * uz + tm * ux;
+      solid.add(new THREE.CylinderGeometry(0.22, 0.22, h - t, 10).translate(px, (h - t) / 2, pz), pillar);
+      this.addCircle(px, pz, 0.35);
+      if (!b.fuel) continue;
+      // isola con due colonnine di erogazione
+      solid.box(px, 0, pz, 1, 0.18, 3.4, ang, island);
+      for (const q of [-1.1, 1.1]) {
+        const qx = px - uz * q;
+        const qz = pz + ux * q;
+        solid.box(qx, 0.18, qz, 0.5, 1.45, 0.75, ang, pump);
+        solid.box(qx, 1.63, qz, 0.54, 0.3, 0.79, ang, side);
+        this.addCircle(qx, qz, 0.5);
+      }
+    }
   }
 
   private buildPools() {
@@ -689,32 +973,67 @@ export class CityWorld implements GameWorld {
     this.group.add(water, new THREE.Mesh(flatGeometry(rim), new THREE.MeshLambertMaterial({ color: '#e9e1cf' })));
   }
 
+  /** Gli alberi veri: ogni modello è scalato sull'altezza e sulla chioma misurate; ombra a terra. */
   private buildTrees() {
     const t = this.map.trees;
-    // 0 pino domestico, 1 latifoglia (leccio, platano), 2 cipresso, 3 cespuglio
+    const cyl = (r0: number, r1: number, h: number, seg = 6) => new THREE.CylinderGeometry(r0, r1, h, seg);
+    const ico = (detail = 0) => new THREE.IcosahedronGeometry(1, detail);
+    // H, R: altezza e raggio della chioma del modello; r: raggio del tronco per le collisioni;
+    // wide: quanto la chioma può allargarsi rispetto all'altezza (un cipresso resta stretto)
     const models = [
       {
-        trunk: merge(new THREE.CylinderGeometry(0.17, 0.3, 6.6, 6).translate(0, 3.3, 0), new THREE.CylinderGeometry(0.1, 0.14, 2.2, 5).rotateZ(0.9).translate(0.8, 5.9, 0)),
-        crown: merge(new THREE.IcosahedronGeometry(1, 0).scale(3.4, 1.1, 3.2).translate(0, 7.1, 0), new THREE.IcosahedronGeometry(1, 0).scale(2.1, 0.85, 2).translate(1.6, 6.8, 0.6)),
-        color: '#3f6b36',
-        r: 0.4,
+        // 0 pino domestico: tronco alto e un po' storto, chioma a ombrello
+        H: 10,
+        R: 4,
+        trunk: merge(cyl(0.2, 0.36, 8.6).rotateZ(0.05).translate(0.2, 4.3, 0), cyl(0.07, 0.11, 2.6).rotateZ(0.95).translate(1.2, 7.9, 0.2), cyl(0.07, 0.11, 2.4).rotateZ(-0.9).translate(-0.8, 8, -0.2)),
+        crown: merge(ico(1).scale(3.4, 0.95, 3.2).translate(0, 8.9, 0), ico().scale(2, 0.7, 1.9).translate(1.9, 8.5, 0.8), ico().scale(1.9, 0.7, 1.8).translate(-1.8, 8.6, -0.6), ico().scale(1.6, 0.6, 1.6).translate(0.3, 9.3, -1.5)),
+        colors: ['#3e5f35', '#46683a', '#3a5a36'],
+        r: 0.38,
+        wide: 1.6,
       },
       {
-        trunk: new THREE.CylinderGeometry(0.18, 0.28, 3.2, 6).translate(0, 1.6, 0),
-        crown: merge(new THREE.IcosahedronGeometry(2.3, 0).translate(0, 4.3, 0), new THREE.IcosahedronGeometry(1.5, 0).translate(1.2, 3.6, 0.6), new THREE.IcosahedronGeometry(1.4, 0).translate(-1.1, 3.8, -0.5)),
-        color: '#4e8a3d',
-        r: 0.4,
+        // 1 latifoglia: lecci, platani, tigli
+        H: 7,
+        R: 3,
+        trunk: merge(cyl(0.16, 0.28, 3.2).translate(0, 1.6, 0), cyl(0.08, 0.12, 1.6).rotateZ(-0.7).translate(0.6, 3.1, 0)),
+        crown: merge(ico(1).scale(2.4, 2, 2.4).translate(0, 4.7, 0), ico().scale(1.6, 1.4, 1.6).translate(1.3, 4, 0.7), ico().scale(1.5, 1.3, 1.5).translate(-1.2, 4.2, -0.6), ico().scale(1.3, 1.2, 1.3).translate(0.2, 5.8, 0.3)),
+        colors: ['#3f6136', '#4f7a3f', '#5d8b45', '#466d39'],
+        r: 0.32,
+        wide: 1.6,
       },
       {
-        trunk: new THREE.CylinderGeometry(0.12, 0.16, 0.8, 5).translate(0, 0.4, 0),
-        crown: new THREE.IcosahedronGeometry(1, 0).scale(1, 3.4, 1).translate(0, 3.6, 0),
-        color: '#2f5b35',
+        // 2 cipresso
+        H: 10,
+        R: 1.3,
+        trunk: cyl(0.12, 0.18, 1, 5).translate(0, 0.5, 0),
+        crown: merge(ico(1).scale(1.25, 4.3, 1.25).translate(0, 5.3, 0), ico().scale(0.7, 1.4, 0.7).translate(0, 8.9, 0)),
+        colors: ['#2c4a2e', '#33522f'],
+        r: 0.55,
+        wide: 1,
+      },
+      {
+        // 3 arbusto: oleandri, pittosfori, siepi
+        H: 2.4,
+        R: 1.5,
+        trunk: null,
+        crown: merge(ico(1).scale(1.5, 1.1, 1.5).translate(0, 1.1, 0), ico().scale(1, 0.8, 1).translate(0.8, 1.4, 0.3)),
+        colors: ['#557f42', '#4c7340', '#6a8b4a'],
+        r: 0.9,
+        wide: 1.8,
+      },
+      {
+        // 4 olivo: tronco contorto, chioma grigio-argento
+        H: 4.5,
+        R: 2.4,
+        trunk: merge(cyl(0.16, 0.3, 2.2).rotateZ(0.25).translate(-0.25, 1.1, 0), cyl(0.12, 0.2, 1.8).rotateZ(-0.45).translate(0.45, 1.6, 0.1)),
+        crown: merge(ico(1).scale(1.9, 1, 1.8).translate(-0.4, 3.3, 0), ico().scale(1.5, 0.9, 1.4).translate(1, 3.5, 0.3), ico().scale(1.2, 0.8, 1.2).translate(0.1, 4, -0.6)),
+        colors: ['#7f9466', '#8a9b70'],
         r: 0.35,
+        wide: 1.5,
       },
-      { trunk: null, crown: merge(new THREE.IcosahedronGeometry(1.1, 0).scale(1, 0.75, 1).translate(0, 0.65, 0)), color: '#5c8f46', r: 0 },
     ];
-    const byType: number[][] = [[], [], [], []];
-    for (let i = 0; i < t.length; i += 4) byType[t[i + 2]].push(i);
+    const byType: number[][] = models.map(() => []);
+    for (let i = 0; i < t.length; i += 5) byType[t[i + 2]]?.push(i);
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
@@ -722,6 +1041,12 @@ export class CityWorld implements GameWorld {
     const s = new THREE.Vector3();
     const c = new THREE.Color();
     const trunkMat = new THREE.MeshLambertMaterial({ color: '#76563e', flatShading: true });
+    // ombre: un disco per chioma, spostato come le ombre dei palazzi
+    const [lx, ly, lz] = this.map.meta.sun;
+    const shadowGeo = new THREE.CircleGeometry(1, 14).rotateX(-Math.PI / 2);
+    const shadowMat = new THREE.MeshBasicMaterial({ color: '#10131c', transparent: true, opacity: this.night ? 0.1 : 0.2, depthWrite: false });
+    const shadows = new THREE.InstancedMesh(shadowGeo, shadowMat, t.length / 5);
+    let ns = 0;
     models.forEach((model, type) => {
       const list = byType[type];
       if (!list.length) return;
@@ -731,22 +1056,115 @@ export class CityWorld implements GameWorld {
       list.forEach((i, k) => {
         const x = t[i] * D;
         const z = t[i + 1] * D;
-        const sc = t[i + 3] / 100;
-        const h = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
-        const rnd = h - Math.floor(h);
+        const h = t[i + 3] * D;
+        const r = t[i + 4] * D;
+        const hs = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+        const rnd = hs - Math.floor(hs);
+        const sy = h / model.H;
+        const sxz = Math.min(model.wide * sy, Math.max(0.55 * sy, r / model.R));
         q.setFromAxisAngle(up, rnd * Math.PI * 2);
-        p.set(x, 0, z);
-        s.set(sc, sc * (0.9 + rnd * 0.2), sc);
-        m.compose(p, q, s);
+        m.compose(p.set(x, 0, z), q, s.set(sxz, sy, sxz));
         crown.setMatrixAt(k, m);
         trunk?.setMatrixAt(k, m);
-        c.set(model.color).offsetHSL((rnd - 0.5) * 0.04, 0, (rnd - 0.5) * 0.08);
+        c.set(model.colors[Math.floor(rnd * 997) % model.colors.length]).offsetHSL((rnd - 0.5) * 0.03, 0, (rnd - 0.5) * 0.06);
         crown.setColorAt(k, c);
-        if (model.r) this.addCircle(x, z, model.r * sc);
+        this.addCircle(x, z, model.r * sxz);
+        const hc = h * 0.75;
+        q.identity();
+        m.compose(p.set(x - (lx / ly) * SUN_SHADOW * hc, 0.02, z - (lz / ly) * SUN_SHADOW * hc), q, s.set(r, 1, r));
+        shadows.setMatrixAt(ns++, m);
       });
       this.group.add(crown);
       if (trunk) this.group.add(trunk);
     });
+    shadows.count = ns;
+    shadows.renderOrder = -2;
+    this.group.add(shadows);
+  }
+
+  /** Campi sportivi: superficie con le righe, reti, frangivento dei campi da tennis, vetri dei padel, porte del calcetto. */
+  private buildCourts() {
+    const c = this.map.courts;
+    if (!c.length) return;
+    const surfaces = COURT_TYPES.map(() => new Geo());
+    const parts = new Geo(); // reti, pali, porte
+    const screens = new Geo(); // frangivento e maglia metallica
+    const glass = new Geo(); // pareti dei padel
+    const white = new THREE.Color('#ffffff');
+    const net = new THREE.Color('#2b3036');
+    const post = new THREE.Color('#59616a');
+    const H = 2.4; // 3 m
+    for (let i = 0; i < c.length; i += 6) {
+      const type = c[i];
+      const x = c[i + 1] * D;
+      const z = c[i + 2] * D;
+      const a = c[i + 3] / 1000;
+      const L = c[i + 4] * D;
+      const W = c[i + 5] * D;
+      const ux = Math.cos(a);
+      const uz = Math.sin(a);
+      const P = (s: number, t: number) => [x + ux * (L / 2) * s - uz * (W / 2) * t, 0.03, z + uz * (L / 2) * s + ux * (W / 2) * t];
+      surfaces[type]?.face([P(-1, -1), P(1, -1), P(1, 1), P(-1, 1)], white, (v) => [((v[0] - x) * ux + (v[2] - z) * uz) / L + 0.5, (-(v[0] - x) * uz + (v[2] - z) * ux) / W + 0.5]);
+      const kind = COURT_TYPES[type];
+      if (kind === 'turf') {
+        for (const s of [-1, 1]) {
+          const gx = x + ux * (L / 2 - 0.6) * s;
+          const gz = z + uz * (L / 2 - 0.6) * s;
+          for (const tt of [-1.2, 1.2]) parts.box(gx - uz * tt, 0, gz + ux * tt, 0.1, 1.6, 0.1, a, white);
+          parts.box(gx, 1.55, gz, 0.1, 0.1, 2.5, a, white);
+        }
+        continue;
+      }
+      // rete a metà campo, con i pali
+      const nl = kind === 'padel' ? W - 0.1 : Math.min(W - 0.2, 10.3);
+      parts.box(x, 0.05, z, 0.04, 0.72, nl, a, net);
+      parts.box(x, 0.77, z, 0.06, 0.06, nl, a, white);
+      for (const s of [-1, 1]) parts.box(x - uz * (nl / 2) * s, 0, z + ux * (nl / 2) * s, 0.1, 0.85, 0.1, a, post);
+      // recinzione, appena dentro il bordo: i campi vicini non si sovrappongono
+      const e = 0.06;
+      const corner = (s: number, t: number) => [x + ux * (L / 2 - e) * s - uz * (W / 2 - e) * t, z + uz * (L / 2 - e) * s + ux * (W / 2 - e) * t];
+      const sides: [number, number, number, number, boolean][] = [
+        [-1, -1, 1, -1, false],
+        [1, -1, 1, 1, true],
+        [1, 1, -1, 1, false],
+        [-1, 1, -1, -1, true],
+      ];
+      for (const [s0, t0, s1, t1, end] of sides) {
+        const [ax, az] = corner(s0, t0);
+        const [bx, bz] = corner(s1, t1);
+        const len = Math.hypot(bx - ax, bz - az);
+        const nx = -(bz - az) / len;
+        const nz = (bx - ax) / len;
+        if (kind === 'padel') {
+          // fondo di vetro, lati di vetro per 2 m e poi maglia metallica
+          if (end) glass.wall(ax, az, bx, bz, 0, H, nx, nz, 0, 0, 0, 0, white);
+          else {
+            const f = Math.min(0.45, 1.6 / len);
+            const lerp = (k: number) => [ax + (bx - ax) * k, az + (bz - az) * k];
+            const [p1x, p1z] = lerp(f);
+            const [p2x, p2z] = lerp(1 - f);
+            glass.wall(ax, az, p1x, p1z, 0, H, nx, nz, 0, 0, 0, 0, white);
+            glass.wall(p2x, p2z, bx, bz, 0, H, nx, nz, 0, 0, 0, 0, white);
+            screens.wall(p1x, p1z, p2x, p2z, 0, H * 0.8, nx, nz, 0, (len * (1 - 2 * f)) / 2, 0, 0.8, white);
+          }
+        } else screens.wall(ax, az, bx, bz, 0, H, nx, nz, 0, len / 2, 0, 1, white);
+        parts.box(ax, 0, az, 0.09, H + 0.05, 0.09, a, post);
+      }
+    }
+    const fence = windscreenTexture();
+    this.textures.push(fence);
+    COURT_TYPES.forEach((kind, i) => {
+      if (surfaces[i].empty) return;
+      const map = courtTexture(kind);
+      this.textures.push(map);
+      const mesh = new THREE.Mesh(surfaces[i].geometry(), new THREE.MeshLambertMaterial({ map, depthWrite: false }));
+      mesh.renderOrder = -85.5;
+      this.group.add(mesh);
+    });
+    this.group.add(new THREE.Mesh(parts.geometry(), new THREE.MeshLambertMaterial({ vertexColors: true })));
+    if (!screens.empty) this.group.add(new THREE.Mesh(screens.geometry(), cutaway(new THREE.MeshLambertMaterial({ map: fence, alphaTest: 0.35, side: THREE.DoubleSide }))));
+    if (!glass.empty)
+      this.group.add(new THREE.Mesh(glass.geometry(), cutaway(new THREE.MeshLambertMaterial({ color: '#cfeaf2', transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide }))));
   }
 
   private buildLamps() {
@@ -838,6 +1256,7 @@ export class CityWorld implements GameWorld {
     const faces: number[] = [];
     const uvs: number[] = [];
     const backs: THREE.BufferGeometry[] = [];
+    const awnings = new Geo();
     pois.forEach((poi, i) => {
       const cx = (i % cols) * SIGN_W;
       const cy = Math.floor(i / cols) * SIGN_H;
@@ -893,6 +1312,23 @@ export class CityWorld implements GameWorld {
         back.rotateY(Math.atan2(nx, nz));
         back.translate(x + nx * 0.02, y, z + nz * 0.02);
         backs.push(back);
+        const canopy = poi.building !== undefined && this.map.buildings[poi.building]?.r === ROOF.canopy;
+        if ((poi.role === 'lunch' || poi.role === 'coffee') && !canopy) {
+          // tenda da sole a strisce sopra la vetrina, nei colori del locale
+          const st = SIGN_STYLES[poi.id] ?? SIGN_DEFAULT;
+          const a = new THREE.Color(st.accent && st.accent !== st.fg ? st.accent : st.bg);
+          const white = new THREE.Color('#f4f1ea');
+          const y0 = y - h / 2 - 0.12;
+          const n = Math.max(4, Math.round(w / 0.5));
+          for (let k = 0; k < n; k++) {
+            const t0 = -w / 2 + (k * w) / n;
+            const t1 = t0 + w / n;
+            const c = k % 2 ? white : a;
+            const p = (t: number, out: number, dy: number) => [x + tx * t + nx * out, y0 + dy, z + tz * t + nz * out];
+            awnings.face([p(t0, 0.05, 0), p(t1, 0.05, 0), p(t1, 1.4, -0.6), p(t0, 1.4, -0.6)], c, () => [0, 0]);
+            awnings.face([p(t0, 1.4, -0.6), p(t1, 1.4, -0.6), p(t1, 1.4, -0.9), p(t0, 1.4, -0.9)], c, () => [0, 0]);
+          }
+        }
       }
       this.places.push({
         id: poi.id,
@@ -915,6 +1351,7 @@ export class CityWorld implements GameWorld {
     geo.computeVertexNormals();
     const faceMat = cutaway(new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
     this.group.add(new THREE.Mesh(geo, faceMat), new THREE.Mesh(merge(...backs), cutaway(new THREE.MeshLambertMaterial({ color: '#2a2f3a' }))));
+    if (!awnings.empty) this.group.add(new THREE.Mesh(awnings.geometry(), cutaway(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }))));
   }
 
   private paintSign(g: CanvasRenderingContext2D, poi: MapPoi, x: number, y: number) {
@@ -1104,12 +1541,24 @@ export class CityWorld implements GameWorld {
       res: '#3d4434', farm: '#4a4632', green: '#3d6236', forest: '#355a30', pitch: '#3f7a43', parking: '#4a4d55', water: '#2f7fb8', path: '#6f6a58', walk: '#6d6b66', road: '#b9bcc4',
     };
     for (const kind of AREA_KINDS) if (MINI[kind]) fill(this.map.areas[kind], MINI[kind]);
+    // campi sportivi coi loro colori (terra rossa, resina, padel, erba sintetica)
+    const COURT_MINI = ['#c4673f', '#2f5f9e', '#2f62b8', '#3f8a45'];
+    const c = this.map.courts;
+    for (let i = 0; i < c.length; i += 6) {
+      const a = c[i + 3] / 1000;
+      g.save();
+      g.translate(c[i + 1] * D, c[i + 2] * D);
+      g.rotate(a);
+      g.fillStyle = COURT_MINI[c[i]] ?? '#3f7a43';
+      g.fillRect((-c[i + 4] * D) / 2, (-c[i + 5] * D) / 2, c[i + 4] * D, c[i + 5] * D);
+      g.restore();
+    }
     g.strokeStyle = '#1d2333';
     g.lineWidth = 0.6;
     for (const b of this.map.buildings) {
-      g.fillStyle = '#d9b98a';
+      g.fillStyle = `#${b.rc.toString(16).padStart(6, '0')}`;
       g.beginPath();
-      for (const r of b.slice(2) as Ring[]) {
+      for (const r of b.rings) {
         for (let i = 0; i < r.length; i += 2) (i ? g.lineTo : g.moveTo).call(g, r[i] * D, r[i + 1] * D);
         g.closePath();
       }
