@@ -29,6 +29,22 @@ export interface MapPoi {
   building?: number;
 }
 
+export interface MapBuilding {
+  h: number; // altezza
+  k: number; // tipo: 0 abitazioni, 1 negozi, 2 scuole e uffici pubblici, 3 chiese, 4 tettoie
+  s: number; // stile della facciata, indice di FACADES in render/city.ts
+  r: number; // tetto: 0 lastrico solare, 1 coppi, 2 cupola, 3 pensilina, 4 lamiera
+  rc: number; // colore del tetto, 0xRRGGBB
+  wc: number; // colore dei muri, 0xRRGGBB
+  /** Lati del contorno esterno (lato i: dal vertice i al successivo) con vetrine al piano terra. */
+  shop?: number[];
+  /** Tetto a padiglione sul rettangolo che contiene la pianta: x, z, angolo del lato lungo, lunghezza, larghezza. */
+  hip?: [number, number, number, number, number];
+  /** Pensilina di un distributore: sotto ci sono le pompe. */
+  fuel?: 1;
+  rings: Ring[];
+}
+
 export interface MapData {
   meta: {
     name: string;
@@ -44,8 +60,11 @@ export interface MapData {
   names: string[];
   areas: Record<AreaKind, Poly[]>;
   shadow: Poly[];
-  /** [altezza, tipo (0 abitazioni, 1 negozi, 2 scuole e uffici pubblici, 3 chiese, 4 tettoie), ...anelli] */
-  buildings: [number, number, ...Ring[]][];
+  /** Colore del suolo misurato dalla Sentinel-2: n×n celle RGB (base64), riga 0 a nord, colonna 0 a ovest. */
+  tint: { n: number; data: string };
+  buildings: MapBuilding[];
+  /** Campi sportivi: tipo (0 tennis in terra rossa, 1 tennis in resina, 2 padel, 3 calcetto), x, z, angolo del lato lungo, lunghezza, larghezza. */
+  courts: number[];
   pools: Poly[];
   /** [classe, indice del nome (-1 = senza nome), flag (1 senso unico, 2 svincolo), x0, z0, x1, z1, …] */
   roads: number[][];
@@ -54,7 +73,7 @@ export interface MapData {
   crossings: number[]; // strisce pedonali: x, z, angolo della strada, larghezza della strada
   stops: number[]; // fermate dell'autobus: x, z, angolo
   lamps: number[]; // lampioni: x, z, angolo verso la strada
-  trees: number[]; // alberi: x, z, tipo (0 pino, 1 latifoglia, 2 cipresso, 3 cespuglio), scala in centesimi
+  trees: number[]; // alberi: x, z, tipo (0 pino domestico, 1 latifoglia, 2 cipresso, 3 arbusto, 4 olivo), altezza, raggio della chioma
   pois: MapPoi[];
 }
 

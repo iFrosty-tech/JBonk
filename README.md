@@ -135,7 +135,8 @@ src/
     draw.ts          primitive di disegno condivise
     billboards.ts    TUTTI gli sprite in 1 draw call (quad istanziati rivolti alla camera) + ombre
     world.ts         interfaccia del mondo (GameWorld) e arena procedurale: colline, piastrelle, muri, arredi
-    city.ts          mappe reali: terreno a strati, edifici estrusi, alberi, lampioni, insegne, collisioni, minimappa
+    city.ts          mappe reali: suolo, edifici (facciate, balconi, tetti, vetrine), alberi, campi sportivi, lampioni, insegne, collisioni, minimappa
+    facades.ts       texture su canvas delle mappe reali: stili di facciata, vetrine, coppi, campi sportivi, frangivento
     props.ts         arredi low-poly fatti con primitive (scrivanie, rack, colonne…)
   maps/              mappe reali generate da scripts/map/build_map.py (mezzocammino.json) e il loro formato
   game/
@@ -152,15 +153,29 @@ Scelte tecniche:
 - **Three.js + TypeScript + Vite**, senza motore fisico: collisioni a cerchi su una griglia spaziale, terreno ad altezza analitica.
 - **2.5D**: mondo 3D low-poly, personaggi come sprite 2D "in piedi" (billboard cilindrici) con ombra a disco.
 - **Prestazioni**: la logica con 280 nemici e 5 armi costa circa **0,7 ms per frame** (misurato). Tutti gli sprite stanno in una sola draw call.
-- **Niente asset esterni**: sprite su canvas, arredi da primitive, effetti sonori in WebAudio. Le immagini dei loghi raster sono incluse nel bundle come data URL. Il bundle è un solo file JS (~810 KB, ~285 KB gzip).
+- **Niente asset esterni**: sprite su canvas, arredi da primitive, effetti sonori in WebAudio. Le immagini dei loghi raster sono incluse nel bundle come data URL. Il bundle è un solo file JS (~1,1 MB, ~395 KB gzip).
 
 ## La mappa: Mezzocammino (Roma)
 
 Per ora c'è una sola mappa: il quartiere reale intorno alla sede JPanik, **Viale Gianluigi Bonelli 40**.
-Strade, marciapiedi, edifici (con le altezze vere), parchi, campi sportivi, piscine, fermate dell'autobus e
-strisce pedonali vengono da [Overture Maps](https://overturemaps.org) (dati © OpenStreetMap contributors, ODbL).
 Scala: 1 metro = 0,8 unità di gioco. I tre progetti si svolgono tutti lì e cambiano nemici, boss e luce
-(mattina, notte con finestre e lampioni accesi, tramonto).
+(mattina, notte con finestre, vetrine e lampioni accesi, tramonto). Tutto viene da dati aperti, misurati:
+
+| Cosa | Fonte | Nel gioco |
+|---|---|---|
+| Strade, marciapiedi, edifici con le altezze vere, parchi, campi sportivi, piscine, fermate, strisce, locali | [Overture Maps](https://overturemaps.org) (dati © OpenStreetMap contributors, ODbL) | geometria della mappa, vetrine al piano terra dove ci sono negozi, bar e agenzie |
+| Alberi | [Meta/WRI High Resolution Canopy Height Maps](https://registry.opendata.aws/dataforgood-fb-forests/) (~1 m, immagini 2018-2020, CC BY 4.0) | ogni albero dove sta davvero, con la sua altezza e la sua chioma: i filari di pini domestici della Colombo, i lecci della riserva, i giardini dei villini |
+| Colore del suolo | [Sentinel-2](https://registry.opendata.aws/sentinel-2-l2a-cogs/) del 13 giugno 2026 (Copernicus) | prati secchi e campi incolti, giardini irrigati, terra, piazzali (NDVI e colore vero, celle di 10 m) |
+| Tetti e campi | Sentinel-2 | tetto a padiglione in coppi dove il tetto è rosso, lastrico solare (parapetto, torrino, pannelli solari) dove è chiaro; terra rossa, padel e erba sintetica dal colore del campo |
+
+Gli edifici hanno lo stile del quartiere, costruito dal 2005 in poi: palazzine a intonaco chiaro o colorato, in cortina
+di mattoni con cornici in travertino, balconi con parapetto pieno; villini con persiane verdi; vetro per gli uffici
+(la sede JPanik). I palazzi vicini sono dello stesso complesso e ne condividono stile e colore. Dati e foto delle
+singole facciate non ci sono: lo stile di ogni palazzo è scelto, non rilevato.
+
+Punti di interesse ricostruiti: l'Enjoy Sporting Club con i 7 campi da tennis in terra rossa (frangivento verdi e reti),
+i 4 padel con le pareti di vetro, i campi in resina, la piscina e la struttura circolare col tetto bianco a cupola; il distributore IP con la
+pensilina blu e le colonnine; bar e ristoranti con vetrine e tende a strisce nei loro colori.
 
 <table>
   <tr>
@@ -211,11 +226,14 @@ I palazzi bloccano il passaggio: i nemici li aggirano con una griglia di navigaz
 ```bash
 pip install -r scripts/map/requirements.txt
 python scripts/map/build_map.py --fetch   # la prima volta: scarica i dati Overture della zona
-python scripts/map/build_map.py           # rigenera src/maps/mezzocammino.json
+python scripts/map/build_map.py           # rigenera src/maps/mezzocammino.json (la prima volta scarica anche chiome e Sentinel-2)
 ```
 
-In `build_map.py` si cambiano area e scala (`CENTER_M`, `HALF_M`, `SCALE`) e la lista dei locali (`POIS`, con
-ruolo: `start`, `lunch`, `coffee`, `sign`). Il rendering è in `render/city.ts`, il formato dei dati in `maps/types.ts`.
+In `build_map.py` si cambiano area e scala (`CENTER_M`, `HALF_M`, `SCALE`), la scena Sentinel-2 (`SCENE`), la lista dei
+locali (`POIS`, con ruolo: `start`, `lunch`, `coffee`, `sign`), gli stili e i colori delle facciate (`WALLS`).
+I raster si leggono a pezzi, con richieste HTTP Range, da archivi pubblici su S3 (`rasters.py`); alberi e colore
+del suolo si ricavano in `landscape.py`. Il rendering è in `render/city.ts` e `render/facades.ts`, il formato dei
+dati in `maps/types.ts`.
 
 ## Come aggiungere un progetto (bioma)
 

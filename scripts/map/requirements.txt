@@ -2,3 +2,5 @@ numpy
 pyarrow
 requests
 shapely>=2.0
+tifffile
+imagecodecs
