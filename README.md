@@ -29,6 +29,22 @@ npm run artifact   # build + artifact/ (pagina + game.js pronti da pubblicare su
 | Esc / P | Pausa |
 | M | Audio on/off |
 
+Da telefono o tablet compaiono i controlli touch (il gioco passa da solo a quelli touch al primo tocco e torna a tastiera e mouse quando si usa il mouse):
+
+| Gesto | Azione |
+|---|---|
+| Pollice sinistro (metà sinistra dello schermo) | Joystick: nasce dove appoggi il dito, più lo spingi più corri |
+| Trascinare un dito sulla metà destra | Camera |
+| Due dita sulla metà destra | Zoom |
+| Pulsanti **Salta** / **Scatto** | Salto / scatto (lo spicchio scuro sullo Scatto è la ricarica) |
+| Pulsante **Usa** | Interagire: compare solo quando c'è qualcosa da usare |
+| Pulsante pausa (sotto la minimappa) | Pausa; dal menu di pausa si accende e spegne l'audio |
+| Tocco sulla carta | Scegliere una carta |
+
+Si gioca meglio col telefono in orizzontale; in verticale il campo visivo si allarga e l'HUD si risistema.
+All'avvio della partita il gioco chiede lo schermo intero dove il browser lo permette (non su iPhone né dentro un iframe):
+su iPhone si ottiene aggiungendo la pagina alla schermata Home.
+
 Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti, `T` +1 ora, `O` +100 €, `N` nuova arma (prima le ultime aggiunte), `C` carta Soldo, `F` onda del radar NGH, `J` statuetta JOscar.
 
 ## Il loop di gioco
@@ -71,6 +87,7 @@ src/
     nav.ts           griglia di navigazione: i nemici aggirano i palazzi (campo di flusso dal giocatore)
     camera.ts, input.ts, spatial.ts (griglia per le collisioni), audio.ts (suoni sintetizzati)
   ui/                HUD, minimappa, numeri di danno, schermate (titolo, carte, pausa, fine partita)
+    touch.ts         controlli touch (joystick, camera, pulsanti): scrivono in game/input.ts come tasti e mouse
 ```
 
 Scelte tecniche:
@@ -155,7 +172,7 @@ ruolo: `start`, `lunch`, `coffee`, `sign`). Il rendering è in `render/city.ts`,
 ## Limiti noti del POC
 
 - Grafica segnaposto: sprite vettoriali ed emoji per le icone dei passivi (su Linux senza font emoji compaiono quadratini).
-- Solo tastiera e mouse: niente controlli touch né gamepad.
+- Tastiera e mouse o touch: niente gamepad. I controlli touch sono provati in emulazione (Chromium), vanno rifiniti su telefoni veri.
 - Niente salvataggi di progressione, sblocchi o classifica. Si memorizza solo la scelta di personaggio e progetto (localStorage).
 - Bilanciamento verificato solo con un bot in simulazione: va rifinito giocando.
 
@@ -165,4 +182,4 @@ ruolo: `start`, `lunch`, `coffee`, `sign`). Il rendering è in `render/city.ts`,
 2. Pipeline grafica: spritesheet PNG (Aseprite) caricate nell'atlas, con 2–4 fotogrammi di animazione.
 3. I progetti reali in `biomes.ts`, con nemici e boss a tema.
 4. Classifica aziendale (piccolo backend, es. Supabase o Node+SQLite in intranet) e sblocchi tra una partita e l'altra.
-5. Controlli touch o gamepad, musica, menu opzioni (sensibilità mouse, volume).
+5. Gamepad, musica, menu opzioni (sensibilità di mouse e touch, volume).

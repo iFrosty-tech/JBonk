@@ -133,6 +133,7 @@ export class Game {
   ) {
     this.camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 400);
     this.rig = new CameraRig(this.camera);
+    this.rig.setAspect(aspect);
     this.solid = new BillboardBatch(atlas, 6000, 'solid');
     this.fx = new BillboardBatch(atlas, 3000, 'fx');
     this.shadows = new ShadowBatch(3000);
@@ -628,8 +629,9 @@ export class Game {
   private updatePlayer(dt: number) {
     const p = this.player;
     const input = this.input;
-    let mx = 0;
-    let mz = 0;
+    // joystick a schermo (analogico) più tastiera
+    let mx = input.moveX;
+    let mz = input.moveY;
     if (input.down('KeyW') || input.down('ArrowUp')) mz += 1;
     if (input.down('KeyS') || input.down('ArrowDown')) mz -= 1;
     if (input.down('KeyA') || input.down('ArrowLeft')) mx -= 1;
@@ -654,7 +656,7 @@ export class Game {
       p.dashZ = p.moving ? dz : f.z;
       this.spawnFx('puff', p.x, p.y, p.z, { size0: 1, size1: 2, life: 0.3, alpha: 0.6 });
     }
-    let speed = TUNING.playerSpeed * this.stats.moveSpeed;
+    let speed = TUNING.playerSpeed * this.stats.moveSpeed * Math.min(1, len);
     if (p.dashT > 0) {
       p.dashT -= dt;
       dx = p.dashX;

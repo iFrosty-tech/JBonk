@@ -29,6 +29,8 @@ body {
   color: var(--paper);
   font-family: var(--font-ui);
   overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 #app {
@@ -36,6 +38,8 @@ body {
   inset: 0;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #app canvas.game {
@@ -54,6 +58,7 @@ body {
 button {
   font: inherit;
   cursor: pointer;
+  touch-action: manipulation;
 }
 button:focus-visible,
 .pick:focus-visible {
@@ -145,6 +150,7 @@ button:focus-visible,
 }
 .counters {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   font-family: var(--font-mono);
   font-weight: 700;
@@ -404,7 +410,9 @@ button:focus-visible,
 .screen.dim {
   background: rgba(10, 12, 18, 0.72);
   display: grid;
-  place-items: center;
+}
+.screen.dim > * {
+  margin: auto;
 }
 .wrap {
   max-width: 1040px;
@@ -468,9 +476,11 @@ button:focus-visible,
     border-color 0.12s;
   min-width: 0;
 }
-.pick:hover {
-  transform: translateY(-2px);
-  border-color: var(--muted);
+@media (hover: hover) {
+  .pick:hover {
+    transform: translateY(-2px);
+    border-color: var(--muted);
+  }
 }
 .pick[aria-pressed='true'] {
   border-color: var(--postit);
@@ -538,8 +548,10 @@ button:focus-visible,
   box-shadow: 5px 5px 0 var(--p3);
   transition: transform 0.08s;
 }
-.btn:hover {
-  transform: translate(-1px, -1px);
+@media (hover: hover) {
+  .btn:hover {
+    transform: translate(-1px, -1px);
+  }
 }
 .btn:active {
   transform: translate(3px, 3px);
@@ -618,8 +630,10 @@ button:focus-visible,
   transition: transform 0.1s;
   min-width: 0;
 }
-.ticket:hover {
-  transform: translateY(-4px) rotate(-0.5deg);
+@media (hover: hover) {
+  .ticket:hover {
+    transform: translateY(-4px) rotate(-0.5deg);
+  }
 }
 .ticket::before {
   content: '';
@@ -781,7 +795,8 @@ button:focus-visible,
   gap: 12px;
 }
 
-@media (max-width: 640px) {
+/* schermi stretti o bassi (telefono, anche in orizzontale) */
+@media (max-width: 640px), (max-height: 500px) {
   .minimap {
     width: 96px;
     height: 96px;
@@ -796,12 +811,244 @@ button:focus-visible,
     width: 34px;
     height: 34px;
   }
+  .clock .where .project {
+    display: none;
+  }
+}
+/* stretto (telefono in verticale): in alto non c'è posto per tutto, l'orologio va sotto i contatori */
+@media (max-width: 640px) {
+  .hud-left {
+    width: min(300px, calc(100% - 150px));
+  }
+  .clock {
+    top: 92px;
+    left: max(16px, env(safe-area-inset-left, 0px));
+    transform: none;
+    justify-items: start;
+    text-align: left;
+  }
+  .clock .where {
+    max-width: min(300px, calc(100vw - 150px));
+  }
+  .bossbar {
+    top: 176px;
+  }
+  .banners {
+    top: 230px;
+  }
+}
+/* basso (telefono in orizzontale) */
+@media (max-height: 500px) {
+  .clock .where {
+    max-width: 30vw;
+  }
+  .screen {
+    padding-block: 14px;
+  }
+  .wrap {
+    gap: 16px;
+  }
+  .modal {
+    gap: 12px;
+  }
+  .modal h2 {
+    font-size: 26px;
+  }
+  .banners {
+    top: 124px;
+  }
+}
+
+/* ------------------------------------------------------------------ controlli touch */
+
+#app.touch .keys.desk,
+#app:not(.touch) .keys.tap,
+#app.touch .ticket kbd {
+  display: none;
+}
+#app.touch canvas.game {
+  cursor: default;
+}
+/* col touch il pulsante di partenza resta sempre a portata di pollice */
+#app.touch .screen.title .start-row {
+  position: sticky;
+  bottom: 0;
+  padding-block: 14px;
+  background: linear-gradient(transparent, var(--ink) 30%);
+}
+@media (max-width: 640px), (max-height: 500px) {
+  /* sui telefoni i pulsanti hanno già il nome e in partita compare il suggerimento */
+  #app.touch .keys.tap {
+    display: none;
+  }
+  #app.touch .screen.title #start {
+    flex: 1;
+  }
+}
+.touch-ui {
+  --safe-l: max(16px, env(safe-area-inset-left, 0px));
+  --safe-r: max(16px, env(safe-area-inset-right, 0px));
+  --safe-b: max(16px, env(safe-area-inset-bottom, 0px));
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+/* il joystick: a riposo in basso a sinistra, poi nasce sotto il pollice */
+.stick {
+  --x: calc(var(--safe-l) + 84px);
+  --y: calc(100% - var(--safe-b) - 84px);
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: 120px;
+  height: 120px;
+  margin: -60px 0 0 -60px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 3px solid rgba(247, 245, 239, 0.55);
+  background: rgba(16, 19, 28, 0.35);
+  opacity: 0.45;
+  pointer-events: none;
+}
+.stick.on {
+  opacity: 1;
+}
+.stick > i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  background: var(--postit);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.touch-ui button {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--ink);
+  touch-action: none;
+}
+.touch-ui button.on {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+.touch-ui .jump {
+  right: calc(var(--safe-r) + 8px);
+  bottom: calc(var(--safe-b) + 8px);
+  width: 84px;
+  height: 84px;
+  font-size: 15px;
+  background: var(--postit);
+  box-shadow: 4px 4px 0 var(--p3);
+}
+.touch-ui .dash {
+  --cd: 0;
+  right: calc(var(--safe-r) + 108px);
+  bottom: calc(var(--safe-b) + 4px);
+  width: 64px;
+  height: 64px;
+  /* lo spicchio scuro è la ricarica dello scatto */
+  background: conic-gradient(rgba(16, 19, 28, 0.6) calc(var(--cd) * 360deg), var(--paper) 0);
+  box-shadow: 4px 4px 0 var(--ink-3);
+}
+.touch-ui .use {
+  right: calc(var(--safe-r) + 18px);
+  bottom: calc(var(--safe-b) + 108px);
+  width: 64px;
+  height: 64px;
+  background: #5dfd8a;
+  box-shadow: 4px 4px 0 var(--ink);
+  animation: usePulse 0.9s ease-in-out infinite alternate;
+}
+@keyframes usePulse {
+  to {
+    scale: 1.08;
+  }
+}
+/* sotto la minimappa */
+.touch-ui .pause {
+  top: 188px;
+  right: var(--safe-r);
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 2px solid var(--ink-3);
+  background: rgba(16, 19, 28, 0.75);
+}
+.touch-ui .pause::before {
+  content: '';
+  width: 14px;
+  height: 16px;
+  box-sizing: border-box;
+  border-inline: 5px solid var(--paper);
+}
+@media (max-width: 640px), (max-height: 500px) {
+  .touch-ui .pause {
+    top: 134px;
+  }
+}
+
+/* HUD col touch: armi e passivi in una riga in basso al centro, tra joystick e pulsanti */
+#app.touch .slots {
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  grid-auto-flow: column;
+  gap: 10px;
+}
+#app.touch .slots .row {
+  gap: 4px;
+}
+#app.touch .slot {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+#app.touch .slot > i {
+  scale: 0.7;
+}
+#app.touch .prompt {
+  width: max-content;
+  max-width: 86vw;
+  white-space: normal;
+  text-align: center;
+}
+#app.touch .hint {
+  bottom: calc(max(10px, env(safe-area-inset-bottom, 0px)) + 40px);
+  max-width: 86vw;
+  width: max-content;
+  text-align: center;
+}
+/* in verticale i controlli occupano il fondo: armi, avvisi e suggerimenti salgono sopra */
+@media (orientation: portrait) {
+  #app.touch .slots {
+    bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 196px);
+  }
+  #app.touch .prompt {
+    bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 244px);
+  }
+  #app.touch .hint {
+    bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 300px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .banner,
   .stage-card,
-  .clock.overtime .time {
+  .clock.overtime .time,
+  .touch-ui .use {
     animation: none;
   }
   .ticket,

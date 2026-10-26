@@ -3,6 +3,7 @@ import { CHARACTERS } from '../config/characters';
 import { ENEMIES } from '../config/enemies';
 import { TUNING } from '../config/tuning';
 import { WEAPONS } from '../config/weapons';
+import type { Audio } from '../game/audio';
 import type { ChoiceRequest } from '../game/entities';
 import type { RunResult } from '../game/game';
 import type { Atlas } from '../render/atlas';
@@ -115,10 +116,14 @@ export class Screens {
     });
     const go = h('button', { class: 'btn', type: 'button', id: 'start' }, 'Timbra il cartellino ▸');
     go.addEventListener('click', () => start(sel));
-    const keys = h('div', { class: 'keys' });
+    const keys = h('div', { class: 'keys desk' });
     keys.innerHTML =
       '<span><kbd>WASD</kbd>muoviti</span><span><kbd>Mouse</kbd>camera</span><span><kbd>Spazio</kbd>salta</span>' +
       '<span><kbd>Shift</kbd>scatto</span><span><kbd>E</kbd>interagisci</span><span><kbd>Esc</kbd>pausa</span><span><kbd>M</kbd>audio</span>';
+    const taps = h('div', { class: 'keys tap' });
+    taps.innerHTML =
+      '<span><kbd>Pollice sx</kbd>muoviti</span><span><kbd>Trascina</kbd>camera</span><span><kbd>Due dita</kbd>zoom</span>' +
+      '<span><kbd>Salta</kbd><kbd>Scatto</kbd><kbd>Usa</kbd>pulsanti</span><span><kbd>II</kbd>pausa</span>';
     const node = h(
       'div',
       { class: 'screen title' },
@@ -133,8 +138,8 @@ export class Screens {
         ),
         h('section', { class: 'step' }, h('h2', {}, '1 · Chi timbra oggi'), chars),
         h('section', { class: 'step' }, h('h2', {}, '2 · Primo progetto'), biomes),
-        h('div', { class: 'start-row' }, keys, go),
-        h('p', { class: 'note' }, 'Proof of concept: grafica generata via codice, nomi di progetti e clienti di fantasia. Serve tastiera e mouse.'),
+        h('div', { class: 'start-row' }, keys, taps, go),
+        h('p', { class: 'note' }, 'Proof of concept: grafica generata via codice, nomi di progetti e clienti di fantasia. Si gioca con tastiera e mouse o col touch (sul telefono meglio in orizzontale).'),
       ),
     );
     refresh();
@@ -146,8 +151,11 @@ export class Screens {
   choice(req: ChoiceRequest, done: () => void) {
     const tickets = h('div', { class: 'tickets' });
     let picked = false;
+    // piccolo ritardo: evita di scegliere per sbaglio tenendo premuto un tasto o toccando lo schermo mentre si gioca
+    const opened = performance.now();
+    const early = () => performance.now() - opened < 300;
     const choose = (i: number) => {
-      if (picked) return;
+      if (picked || early()) return;
       picked = true;
       req.cards[i].apply();
       this.close();
@@ -170,7 +178,7 @@ export class Screens {
     if (req.skipLabel) {
       const skip = h('button', { class: 'link', type: 'button' }, req.skipLabel);
       skip.addEventListener('click', () => {
-        if (picked) return;
+        if (picked || early()) return;
         picked = true;
         req.onSkip?.();
         this.close();
@@ -179,29 +187,35 @@ export class Screens {
       modal.append(skip);
     }
     const node = h('div', { class: 'screen dim' }, modal);
-    // piccolo ritardo: evita di scegliere per sbaglio tenendo premuto un tasto
-    const opened = performance.now();
     this.show(node, (e) => {
-      if (performance.now() - opened < 250) return;
       const n = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'].indexOf(e.code) % 3;
       if (n >= 0 && n < req.cards.length && /Digit|Numpad/.test(e.code)) choose(n);
     });
   }
 
-  pause(resume: () => void, restart: () => void, menu: () => void) {
+  pause(resume: () => void, restart: () => void, menu: () => void, audio: Audio) {
     const r = h('button', { class: 'btn', type: 'button', id: 'resume' }, 'Riprendi');
     const rs = h('button', { class: 'btn secondary', type: 'button' }, 'Ricomincia');
     const m = h('button', { class: 'btn secondary', type: 'button' }, 'Menu principale');
+    // il tasto M sul telefono non c'è
+    const a = h('button', { class: 'btn secondary', type: 'button', id: 'audio' });
+    const audioLabel = () => (a.textContent = audio.muted ? 'Audio: spento' : 'Audio: acceso');
+    audioLabel();
     r.addEventListener('click', resume);
     rs.addEventListener('click', restart);
     m.addEventListener('click', menu);
+    a.addEventListener('click', () => {
+      audio.toggle();
+      audioLabel();
+    });
     const node = h(
       'div',
       { class: 'screen dim' },
-      h('div', { class: 'panel' }, h('h2', {}, 'Pausa pranzo'), h('p', {}, 'Il timer è fermo. Le mail, purtroppo, no.'), h('div', { class: 'actions' }, r, rs, m)),
+      h('div', { class: 'panel' }, h('h2', {}, 'Pausa pranzo'), h('p', {}, 'Il timer è fermo. Le mail, purtroppo, no.'), h('div', { class: 'actions' }, r, rs, m, a)),
     );
     this.show(node, (e) => {
       if (e.code === 'Escape' || e.code === 'KeyP') resume();
+      if (e.code === 'KeyM') audioLabel();
     });
     r.focus();
   }

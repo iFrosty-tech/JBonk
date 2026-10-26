@@ -8,6 +8,7 @@ import { Input } from './game/input';
 import type { Atlas } from './render/atlas';
 import { Hud } from './ui/hud';
 import { Screens, type TitleChoice } from './ui/screens';
+import { TouchControls } from './ui/touch';
 
 // Collega renderer, input, HUD, schermate e la partita in corso.
 
@@ -39,6 +40,7 @@ export class App {
   readonly input: Input;
   readonly audio = new Audio();
   readonly screens: Screens;
+  readonly touch: TouchControls;
   game: Game | null = null;
   hud: Hud | null = null;
   private selection = loadSelection();
@@ -50,12 +52,17 @@ export class App {
     readonly atlas: Atlas,
   ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     const canvas = this.renderer.domElement;
     canvas.className = 'game';
     root.appendChild(canvas);
     this.input = new Input(canvas);
+    // sui telefoni meno pixel: lo schermo è piccolo e la GPU pure
+    this.renderer.setPixelRatio(Math.min(this.input.touch ? 1.5 : 2, window.devicePixelRatio || 1));
+    this.touch = new TouchControls(root, this.input, () => this.pause());
     this.screens = new Screens(root, this.atlas);
+    const touchMode = () => root.classList.toggle('touch', this.input.touch);
+    this.input.onTouchChange = touchMode;
+    touchMode();
 
     this.input.onLockLost = () => {
       if (this.game?.mode === 'play') this.pause();
@@ -115,11 +122,23 @@ export class App {
     this.endGame();
     this.screens.close();
     this.audio.unlock();
+    if (this.input.touch) this.fullscreen();
     this.hud = new Hud(this.root, this.atlas);
     const { clientWidth: w, clientHeight: h } = this.root;
     this.game = new Game(this.atlas, CHARACTERS[c.character], c.biome, this.input, this.audio, this.hooks, w / Math.max(1, h));
     this.input.requestLock();
     this.last = performance.now();
+  }
+
+  /** Sul telefono si gioca a schermo intero, dove il browser lo permette (non su iPhone né in un iframe). */
+  private fullscreen() {
+    const el = document.documentElement;
+    if (document.fullscreenElement || !el.requestFullscreen) return;
+    try {
+      el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+    } catch {
+      // ignorato
+    }
   }
 
   private pause() {
@@ -131,11 +150,13 @@ export class App {
       () => this.resume(),
       () => this.startRun(this.selection),
       () => this.showTitle(),
+      this.audio,
     );
   }
 
   private resume() {
     if (!this.game || this.game.mode !== 'paused') return;
+    this.audio.unlock(); // su iPhone l'audio si sospende quando si esce dall'app
     this.screens.close();
     this.game.mode = 'play';
     this.input.requestLock();
@@ -179,10 +200,7 @@ export class App {
     const w = this.root.clientWidth;
     const h = this.root.clientHeight;
     this.renderer.setSize(w, h, false);
-    if (this.game) {
-      this.game.camera.aspect = w / Math.max(1, h);
-      this.game.camera.updateProjectionMatrix();
-    }
+    this.game?.rig.setAspect(w / Math.max(1, h));
   };
 
   private loop = (t: number) => {
@@ -192,8 +210,9 @@ export class App {
     if (g) {
       g.update(dt);
       g.draw(this.renderer);
-      this.hud?.update(g, this.input.locked);
+      this.hud?.update(g);
     }
+    this.touch.update(g);
     this.input.endFrame();
     requestAnimationFrame(this.loop);
   };

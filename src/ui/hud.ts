@@ -82,7 +82,6 @@ export class Hud {
     this.prompt = el('div', 'prompt', this.root);
     this.prompt.hidden = true;
     this.hint = el('div', 'hint', this.root);
-    this.hint.textContent = 'Clicca sul gioco per guidare la camera col mouse (oppure trascina) · Esc per la pausa';
     this.banners = el('div', 'banners', this.root);
   }
 
@@ -113,8 +112,9 @@ export class Hud {
     this.cache.delete('slots');
   }
 
-  update(g: Game, locked: boolean) {
+  update(g: Game) {
     const p = g.player;
+    const touch = g.input.touch;
     const s = g.stats;
     this.set('xp', (g.xp / g.xpNext).toFixed(3), (v) => (this.xpFill.style.width = `${Math.min(100, +v * 100)}%`));
     this.set('lv', String(g.level), (v) => (this.lv.textContent = `LV ${v}`));
@@ -132,7 +132,13 @@ export class Hud {
     });
     const loc = g.location();
     this.set('where', g.biome.id + c.overtime + loc, () => {
-      this.where.textContent = c.overtime ? 'Straordinario!' : `${g.biome.project} · ${loc ?? g.biome.place}`;
+      if (c.overtime) this.where.textContent = 'Straordinario!';
+      else {
+        // sugli schermi piccoli il nome del progetto si nasconde (CSS): resta il posto
+        this.where.replaceChildren();
+        el('span', 'project', this.where).textContent = `${g.biome.project} · `;
+        this.where.append(loc ?? g.biome.place);
+      }
     });
     this.hurt.style.opacity = String(g.hurtFlash * 0.8);
 
@@ -142,11 +148,17 @@ export class Hud {
       this.bossFill.style.transform = `scaleX(${Math.max(0, g.boss.hp / g.boss.maxHp)})`;
     } else this.bossbar.hidden = true;
 
-    this.set('prompt', g.prompt ?? '', (v) => {
+    // col touch al posto di [E] compare il pulsante "Usa"
+    this.set('prompt', (touch ? g.prompt?.replace(/^\[E\] /, '') : g.prompt) ?? '', (v) => {
       this.prompt.hidden = !v;
       this.prompt.textContent = v;
     });
-    this.hint.hidden = locked || g.mode !== 'play';
+    this.set('hint', String(touch), () => {
+      this.hint.textContent = touch
+        ? 'Pollice sinistro: muoviti · trascina a destra: camera · due dita: zoom'
+        : 'Clicca sul gioco per guidare la camera col mouse (oppure trascina) · Esc per la pausa';
+    });
+    this.hint.hidden = g.mode !== 'play' || (touch ? g.runTime > 10 || !!g.prompt : g.input.locked);
 
     const slotKey = g.weapons.map((w) => w.def.id + w.level).join() + '|' + g.passives.map((x) => x.id + x.level).join();
     this.set('slots', slotKey, () => this.renderSlots(g));

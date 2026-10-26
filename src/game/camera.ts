@@ -21,6 +21,15 @@ export class CameraRig {
     this.first = true;
   }
 
+  /** Con lo schermo in verticale (telefono) allarga il campo visivo: si vedrebbe solo una striscia di mondo. */
+  setAspect(aspect: number) {
+    const c = this.camera;
+    c.aspect = aspect;
+    const half = Math.tan((30 * Math.PI) / 180);
+    c.fov = aspect >= 1 ? 60 : Math.min(80, (2 * Math.atan(half / Math.sqrt(aspect)) * 180) / Math.PI);
+    c.updateProjectionMatrix();
+  }
+
   update(dt: number, input: Input | null, px: number, py: number, pz: number, world: GameWorld) {
     if (input) {
       this.yaw -= input.mouseDX * 0.0032 * this.sensitivity;
