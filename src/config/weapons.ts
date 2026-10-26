@@ -186,12 +186,12 @@ const list: WeaponDef[] = [
     ],
   },
   {
-    id: 'hexa',
-    name: 'Sciame Esagonale',
-    description: 'Un alveare ti segue: gli esagoni si staccano, inseguono i nemici ed esplodono, poi ricrescono al loro posto.',
+    id: 'jpanik',
+    name: 'Alveare JPanik',
+    description: 'L\'alveare di JPanik ti segue: ogni esagono si stacca, insegue un nemico ed esplode, poi ricresce al suo posto.',
     kind: 'swarm',
-    icon: 'hexa',
-    sprite: 'hexa', // alveare: celle hexa_c0…hexa_c7, in volo hexa_fly, esplosione hexa_burst
+    icon: 'jpanik',
+    sprite: 'jpanik', // alveare: celle jpanik_c0…jpanik_c7, in volo jpanik_fly, esplosione jpanik_burst
     maxLevel: 10,
     base: { damage: 14, cooldown: 1.2, count: 2, area: 1, speed: 16, pierce: 0, duration: 0.8, range: 24, knockback: 0.5 },
     upgrades: [

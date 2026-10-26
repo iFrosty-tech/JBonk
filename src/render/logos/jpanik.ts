@@ -1,9 +1,9 @@
 import { type G, type SpriteDef, TAU } from '../draw';
 
-// Il logo arancione a esagoni, ricostruito in vettoriale: ogni esagono è stato misurato
-// sull'originale (200×200) ed è anche uno sprite a sé ('hexa_c0'…'hexa_c7').
+// JPanik: il logo a esagoni ricostruito in vettoriale. Ogni esagono è stato misurato
+// sull'originale (200×200) ed è anche uno sprite a sé ('jpanik_c0'…'jpanik_c7').
 // Nel gioco gli esagoni formano un alveare sopra il giocatore, si staccano uno alla volta
-// per inseguire i nemici ('hexa_fly', un prisma che si ribalta) e poi ricrescono al loro posto.
+// per inseguire i nemici ('jpanik_fly', un prisma che si ribalta) e poi ricrescono al loro posto.
 
 const FACE = '#fc4c02';
 const LIP = '#ffae82'; // il bordo chiaro sotto ogni esagono, che dà spessore
@@ -62,7 +62,7 @@ function hexTile(g: G, h: number[], ox: number, oy: number, k: number) {
   hexShape(g, h, ox, oy, k, FACE);
 }
 
-function hexaLogo(g: G) {
+function jpanikLogo(g: G) {
   const k = 0.58;
   const ox = 64 - CENTER.x * k;
   const oy = 64 - CENTER.y * k;
@@ -70,7 +70,7 @@ function hexaLogo(g: G) {
 }
 
 /** Un solo esagono del logo, centrato nella sua cella. */
-function hexaCell(g: G, idx: number) {
+function jpanikCell(g: G, idx: number) {
   const h = HEXES[idx];
   const c = centroid(h);
   hexTile(g, h, 64 - c.x * CELL_SCALE, 64 - c.y * CELL_SCALE, CELL_SCALE);
@@ -152,7 +152,7 @@ export interface HiveLayout {
   size: number; // larghezza del logo in px
 }
 
-export const HEXA_HIVE: HiveLayout = {
+export const JPANIK_HIVE: HiveLayout = {
   cells: HEXES.map((h) => {
     const c = centroid(h);
     return { x: c.x - CENTER.x, y: c.y - CENTER.y };
@@ -161,9 +161,9 @@ export const HEXA_HIVE: HiveLayout = {
   size: 203,
 };
 
-export const HEXA_SPRITES: SpriteDef[] = [
-  { id: 'hexa', cw: 1, ch: 1, draw: hexaLogo },
-  ...HEXES.map((_, idx): SpriteDef => ({ id: `hexa_c${idx}`, cw: 1, ch: 1, draw: (g) => hexaCell(g, idx) })),
-  { id: 'hexa_fly', cw: 1, ch: 1, frames: 8, draw: (g, _w, _h, i, n) => hexPrism(g, i, n) },
-  { id: 'hexa_burst', cw: 1, ch: 1, frames: 6, draw: (g, _w, _h, i, n) => hexBurst(g, i, n) },
+export const JPANIK_SPRITES: SpriteDef[] = [
+  { id: 'jpanik', cw: 1, ch: 1, draw: jpanikLogo },
+  ...HEXES.map((_, idx): SpriteDef => ({ id: `jpanik_c${idx}`, cw: 1, ch: 1, draw: (g) => jpanikCell(g, idx) })),
+  { id: 'jpanik_fly', cw: 1, ch: 1, frames: 8, draw: (g, _w, _h, i, n) => hexPrism(g, i, n) },
+  { id: 'jpanik_burst', cw: 1, ch: 1, frames: 6, draw: (g, _w, _h, i, n) => hexBurst(g, i, n) },
 ];

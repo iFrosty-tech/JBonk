@@ -54,7 +54,7 @@ src/
     passives.ts      passivi ("tomi") e bevande della macchinetta
     characters.ts    personaggi giocabili, compagno, arma iniziale, bonus
     tuning.ts        bilanciamento globale (durata giornata, spawn, curva XP, rarità)
-  assets/            immagini dei loghi raster, già ritagliate (Java e MongoDB scomposti in parti, Soldo, Spring, scritta NGH, JOscar)
+  assets/            immagini dei loghi raster, già ritagliate (Java e MongoDB scomposti in parti, Soldo, Spring, scritta NGH, JOscar); JPanik è ridisegnato in vettoriale
   render/
     atlas.ts         sprite disegnati via codice in un'unica texture (stile sagoma di cartone), anche animati
     logos/           sprite animati dai loghi di tecnologie, clienti e premi: un file per logo, elenco in index.ts
@@ -99,7 +99,7 @@ Scelte tecniche:
   - **Soldo**: la carta originale (`assets/soldo-card.webp`) che gira in prospettiva, con il retro disegnato e un riflesso. È la *Carta Soldo* che ricarica il budget.
   - **Spring**: il logo originale (`assets/spring.webp`) su un disco visto in prospettiva che gira, con lo spessore del bordo e un riflesso fisso. È l'arma *Spring Boot*: un frisbee che va, attraversa i nemici e torna.
   - **MongoDB**: la foglia originale divisa lungo la nervatura in due metà e gambo (`assets/mongo-leaf.webp`). In volo si ribalta e mostra il rovescio più chiaro; all'impatto le metà si separano. È l'arma *Foglia di MongoDB*: le metà diventano shard che colpiscono i nemici vicini.
-  - **Logo a esagoni**: gli 8 esagoni misurati sull'originale e ridisegnati, ognuno anche come sprite a sé. È l'arma *Sciame Esagonale*: un alveare con la forma del logo segue il giocatore, gli esagoni si staccano (prismi che si ribaltano in volo), inseguono i nemici, esplodono e ricrescono al loro posto.
+  - **JPanik**: gli 8 esagoni del logo misurati sull'originale e ridisegnati, ognuno anche come sprite a sé. È l'arma *Alveare JPanik*: un alveare con la forma del logo segue il giocatore, gli esagoni si staccano (prismi che si ribaltano in volo), inseguono i nemici, esplodono e ricrescono al loro posto.
   - **NGH · NextGenerationHIS**: il simbolo del logo ridisegnato in vettoriale (lo spicchio gira come il fascio di un radar, con la scia e i "bip") e la scritta originale (`assets/ngh-text.webp`), su un totem eliminacode che stampa i numeri. È il *Totem NGH*: i nemici in attesa diventano verde acqua e tengono in mano il loro biglietto.
   - **JOscar**: la statuetta originale (`assets/joscar.webp`, oro e base separati) con un riflesso che scorre solo sull'oro e la targhetta "JOSCAR" sulla base. Intorno: fasci di luce da palco, scintille e coriandoli per la premiazione.
 - Per aggiungere un logo: crea un file in `render/logos/` che esporta i suoi `SpriteDef` e aggiungilo all'elenco in `logos/index.ts`. Se è raster, metti l'immagine in `src/assets` e registrala in `logos/images.ts`, poi disegnala con `images.get(...)`. Per i loghi vettoriali basta ridisegnarli su canvas (con `Path2D` si possono usare direttamente i path SVG).

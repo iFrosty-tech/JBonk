@@ -94,7 +94,7 @@ export class Audio {
         this.tone(1500, 2300, 0.04, 'square', 0.05);
         this.tone(1900, 2700, 0.05, 'square', 0.04, 0.045);
         break;
-      case 'pop': // esagono che esplode
+      case 'pop': // esagono di JPanik che esplode
         this.tone(760, 180, 0.08, 'square', 0.07);
         break;
       case 'ping': // il radar del totem NGH, con l'eco
