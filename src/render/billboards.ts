@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Atlas, Frame } from './atlas';
+import { TAU } from './draw';
 
 // Tutti gli sprite 2D del mondo (nemici, giocatore, proiettili, raccoglibili) vengono
 // disegnati in UNA draw call: un quad istanziato per sprite, sempre rivolto verso la camera
@@ -155,27 +156,61 @@ export class BillboardBatch {
   }
 }
 
-/** Ombre a disco sotto gli sprite: rendono leggibile la profondità in 2.5D. Con un altro colore fanno da macchie a terra. */
+// Anello della Call di Gruppo: trattini lilla chiaro con un bordo scuro (il viola pieno di notte non si vede)
+const RING_COLOR = new THREE.Color(0xb9bbff);
+const RING_ALPHA = 0.92;
+const RING_EDGE_COLOR = new THREE.Color(0x221a5e);
+const RING_EDGE_ALPHA = 0.75;
+const RING_STEP = 1.4; // distanza tra l'inizio di due trattini, in unità del mondo
+const RING_WIDTH = 0.36;
+const RING_EDGE = 0.08; // spessore del bordo scuro intorno a ogni trattino
+const RING_MAX = 128; // trattini al massimo per anello
+
+/**
+ * Ombre a disco sotto gli sprite: rendono leggibile la profondità in 2.5D. Con un altro colore fanno da macchie a terra.
+ * Ogni istanza ha colore e opacità propri (di default quelli del costruttore): così `ring` disegna l'anello
+ * della Call di Gruppo con dischi allungati nella stessa draw call delle ombre.
+ */
 export class ShadowBatch {
   readonly mesh: THREE.InstancedMesh;
   private n = 0;
   private readonly cap: number;
+  private readonly color: THREE.Color; // colore di default (lineare, come lo vuole lo shader)
+  private readonly opacity: number;
+  private readonly aAlpha: THREE.InstancedBufferAttribute;
+  private readonly aColor: THREE.InstancedBufferAttribute;
+  private readonly ringY = new Float32Array(RING_MAX);
 
   constructor(cap: number, color = 0x0b0e18, opacity = 0.32) {
     this.cap = cap;
+    this.color = new THREE.Color(color);
+    this.opacity = opacity;
     const geo = new THREE.CircleGeometry(0.5, 20);
     geo.rotateX(-Math.PI / 2);
+    this.aAlpha = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
+    this.aAlpha.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('iAlpha', this.aAlpha);
+    // il colore del materiale resta bianco: lo shader lo moltiplica per il colore dell'istanza
     const mat = new THREE.MeshBasicMaterial({
-      color,
+      color: 0xffffff,
       transparent: true,
-      opacity,
       depthWrite: false,
       polygonOffset: true,
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2,
     });
+    mat.onBeforeCompile = (s) => {
+      s.vertexShader = s.vertexShader
+        .replace('void main() {', 'attribute float iAlpha;\nvarying float vIAlpha;\nvoid main() {\n  vIAlpha = iAlpha;');
+      s.fragmentShader = s.fragmentShader
+        .replace('void main() {', 'varying float vIAlpha;\nvoid main() {')
+        .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.a *= vIAlpha;');
+    };
     this.mesh = new THREE.InstancedMesh(geo, mat, cap);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.aColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+    this.aColor.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.instanceColor = this.aColor;
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 1;
   }
@@ -185,31 +220,75 @@ export class ShadowBatch {
   }
 
   push(x: number, y: number, z: number, diameter: number) {
+    this.put(x, y + 0.06, z, diameter, 0, 0, diameter, this.color, this.opacity);
+  }
+
+  /**
+   * Anello tratteggiato a terra (Call di Gruppo) di raggio `r` intorno a (cx, cz). Ogni trattino sta
+   * all'altezza del terreno, così l'anello segue i dislivelli; `spin` ruota il tratteggio (radianti).
+   */
+  ring(cx: number, cz: number, r: number, ground: { height(x: number, z: number): number }, spin = 0) {
+    const n = Math.min(RING_MAX, Math.max(8, Math.round((TAU * r) / RING_STEP)));
+    const len = ((TAU * r) / n) * 0.6;
+    for (let i = 0; i < n; i++) {
+      const a = spin + (i / n) * TAU;
+      this.ringY[i] = ground.height(cx + Math.cos(a) * r, cz + Math.sin(a) * r) + 0.06;
+    }
+    // prima tutti i bordi e poi i trattini, così nessun bordo copre il trattino accanto
+    for (let pass = 0; pass < 2; pass++) {
+      const edge = pass === 0;
+      const l = edge ? len + RING_EDGE * 2 : len;
+      const w = edge ? RING_WIDTH + RING_EDGE * 2 : RING_WIDTH;
+      for (let i = 0; i < n; i++) {
+        const a = spin + (i / n) * TAU;
+        const c = Math.cos(a);
+        const s = Math.sin(a);
+        // asse lungo sulla tangente (-s, c); asse corto verso il centro, perché la terna resti destrorsa
+        this.put(cx + c * r, this.ringY[i], cz + s * r, -s * l, c * l, -c * w, -s * w,
+          edge ? RING_EDGE_COLOR : RING_COLOR, edge ? RING_EDGE_ALPHA : RING_ALPHA);
+      }
+    }
+  }
+
+  /** Un disco piatto: (ax, az) e (bx, bz) sono i suoi due assi già scalati, nel piano orizzontale. */
+  private put(x: number, y: number, z: number, ax: number, az: number, bx: number, bz: number, color: THREE.Color, alpha: number) {
     if (this.n >= this.cap) return;
+    const i = this.n++;
     const m = this.mesh.instanceMatrix.array as Float32Array;
-    const o = this.n++ * 16;
-    m[o] = diameter;
+    const o = i * 16;
+    m[o] = ax;
     m[o + 1] = 0;
-    m[o + 2] = 0;
+    m[o + 2] = az;
     m[o + 3] = 0;
     m[o + 4] = 0;
     m[o + 5] = 1;
     m[o + 6] = 0;
     m[o + 7] = 0;
-    m[o + 8] = 0;
+    m[o + 8] = bx;
     m[o + 9] = 0;
-    m[o + 10] = diameter;
+    m[o + 10] = bz;
     m[o + 11] = 0;
     m[o + 12] = x;
-    m[o + 13] = y + 0.06;
+    m[o + 13] = y;
     m[o + 14] = z;
     m[o + 15] = 1;
+    const k = this.aColor.array as Float32Array;
+    k[i * 3] = color.r;
+    k[i * 3 + 1] = color.g;
+    k[i * 3 + 2] = color.b;
+    (this.aAlpha.array as Float32Array)[i] = alpha;
   }
 
   end() {
     this.mesh.count = this.n;
-    this.mesh.instanceMatrix.clearUpdateRanges();
-    this.mesh.instanceMatrix.addUpdateRange(0, Math.max(1, this.n) * 16);
-    this.mesh.instanceMatrix.needsUpdate = true;
+    for (const [a, size] of [
+      [this.mesh.instanceMatrix, 16],
+      [this.aColor, 3],
+      [this.aAlpha, 1],
+    ] as const) {
+      a.clearUpdateRanges();
+      a.addUpdateRange(0, Math.max(1, this.n) * size);
+      a.needsUpdate = true;
+    }
   }
 }

@@ -190,6 +190,8 @@ export class App {
       }
     }
     if (e.code === 'KeyV') this.debugVim(g);
+    // una Call di Gruppo 8 unità davanti (rispetta il limite di call vive)
+    if (e.code === 'KeyY') g.spawnCall(g.player.x + g.rig.forward.x * 8, g.player.z + g.rig.forward.z * 8);
     if (e.code === 'KeyC') g.spawnPickup('card', 15, g.player.x + g.rig.forward.x * 4, g.player.z + g.rig.forward.z * 4);
     if (e.code === 'KeyF') g.startWave(g.player.x, g.player.z);
     if (e.code === 'KeyJ') {

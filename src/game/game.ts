@@ -61,6 +61,7 @@ const tmpDir = { x: 0, z: 0 };
 const tmpTarget = new THREE.Vector3();
 const NAV_RADIUS = 60; // celle (da 2 unità) intorno al giocatore in cui i nemici aggirano gli ostacoli
 const RELOCATE_DIST = 95; // i nemici rimasti troppo indietro ricompaiono vicino al giocatore
+const IN_CALL_COLOR = '#b9bbff'; // numeri di danno sui nemici in call (lilla chiaro, come il segnale in minimappa)
 
 export class Game {
   readonly scene = new THREE.Scene();
@@ -125,6 +126,11 @@ export class Game {
   private readonly frames = new Map<string, Frame>();
   private readonly anims = new Map<string, Frame[]>();
   private stagesCleared = 0;
+  /** Nemici con aura (Call di Gruppo) vivi; `openAuras` = quelli con l'anello aperto in questo frame. */
+  private auras: Enemy[] = [];
+  private readonly openAuras: Enemy[] = [];
+  private callT = 0; // secondi alla prossima Call di Gruppo a tempo
+  private callAnnounced = false; // banner già mostrato in questa partita
 
   constructor(
     readonly atlas: Atlas,
@@ -180,6 +186,9 @@ export class Game {
     this.stageTime = 0;
     this.spawnAcc = 0;
     this.eliteT = 0;
+    this.auras.length = 0;
+    this.openAuras.length = 0;
+    this.callT = 0;
     this.swarmsDone.clear();
 
     // i locali della mappa reale: pausa pranzo nei ristoranti, macchinetta del caffè nei bar
@@ -425,17 +434,40 @@ export class Game {
     const kind = def.kind ?? 'normal';
     const hpMul = kind === 'boss' ? stageMul : kind === 'elite' ? (1 + minutes * 0.2) * stageMul : (1 + minutes * 0.25) * stageMul;
     const dmgMul = (1 + minutes * 0.09) * (1 + this.stage * 0.45);
+    const frames = this.anim(def.sprite);
     const e: Enemy = {
-      id: this.nextId++, def, frame: this.frame(def.sprite),
+      id: this.nextId++, def, frame: frames[0], anim: frames.length > 1 ? frames : null,
       x: tmpPt.x, z: tmpPt.z, y: this.world.height(tmpPt.x, tmpPt.z) + (def.hover ?? 0),
       kx: 0, kz: 0, hp: def.hp * hpMul, maxHp: def.hp * hpMul,
       speed: def.speed * (0.9 + Math.random() * 0.2), damage: def.damage * dmgMul,
       radius: def.radius, height: def.height, flash: 0, face: 1, phase: Math.random() * 10, alive: true, frozen: 0, lost: 0,
+      reduction: 0, auraT: def.aura ? def.aura.delay : 0,
       elite: kind === 'elite', boss: kind === 'boss',
       shotT: def.boss ? def.boss.shotEvery : 0, chargeT: def.boss ? def.boss.chargeEvery : 0,
       telegraph: 0, charging: 0, cx: 0, cz: 0,
     };
     this.enemies.push(e);
+    if (def.aura) this.auras.push(e);
+    return e;
+  }
+
+  /**
+   * Fa comparire una Call di Gruppo (in (x, z) o in un punto di spawn), se non si è già al limite di call vive.
+   * Suona la notifica; alla prima call della partita mostra il banner con la riduzione letta dalla configurazione.
+   */
+  spawnCall(x?: number, z?: number): Enemy | null {
+    const c = TUNING.call;
+    const def = ENEMIES[c.enemy];
+    const k = Math.min(this.stage, c.maxAlive.length - 1);
+    let alive = 0;
+    for (const a of this.auras) if (a.alive && a.def === def) alive++;
+    if (alive >= c.maxAlive[k]) return null;
+    const e = this.spawnEnemy(def, x, z);
+    this.audio.play('notify');
+    if (!this.callAnnounced && def.aura) {
+      this.callAnnounced = true;
+      this.hooks.banner(`Chi è in call prende -${Math.round(def.aura.reduction * 100)}% danno`, 'warn');
+    }
     return e;
   }
 
@@ -475,6 +507,9 @@ export class Game {
     let dmg = base * s.damage;
     const crit = Math.random() < s.critChance;
     if (crit) dmg *= s.critDamage;
+    // in call (anello di una Call di Gruppo): meno danno da ogni fonte, numero lilla e più piccolo
+    const inCall = e.reduction > 0;
+    if (inCall) dmg *= 1 - e.reduction;
     dmg = Math.max(1, Math.round(dmg * (0.92 + Math.random() * 0.16)));
     e.hp -= dmg;
     e.flash = 1;
@@ -482,7 +517,7 @@ export class Game {
     e.kx += kx * 6 * mass;
     e.kz += kz * 6 * mass;
     if (w) w.damageDealt += dmg;
-    this.addNumber(e.x, e.y + e.height, e.z, String(dmg), crit, crit ? '#ffd23f' : '#ffffff');
+    this.addNumber(e.x, e.y + e.height, e.z, String(dmg), crit, inCall ? IN_CALL_COLOR : crit ? '#ffd23f' : '#ffffff', inCall);
     if (this.hitFxBudget > 0) {
       this.hitFxBudget--;
       this.spawnFx('spark', e.x, e.y + e.height * 0.5, e.z, { size0: 0.8, size1: 0.1, life: 0.12, rot: Math.random() * 3 });
@@ -491,9 +526,9 @@ export class Game {
     if (e.hp <= 0) this.killEnemy(e);
   }
 
-  private addNumber(x: number, y: number, z: number, text: string, crit: boolean, color: string) {
+  private addNumber(x: number, y: number, z: number, text: string, crit: boolean, color: string, small = false) {
     if (this.numbers.length > 70) this.numbers.shift();
-    this.numbers.push({ x: x + (Math.random() - 0.5) * 0.6, y, z, text, life: 0.75, crit, color });
+    this.numbers.push({ x: x + (Math.random() - 0.5) * 0.6, y, z, text, life: 0.75, crit, color, small });
   }
 
   private killEnemy(e: Enemy) {
@@ -509,6 +544,7 @@ export class Game {
       else if (r < 0.0075) this.spawnPickup('card', 10, e.x, e.z);
     }
     this.spawnFx('puff', e.x, e.y, e.z, { size0: e.height * 0.8, size1: e.height * 1.4, life: 0.3, alpha: 0.8 });
+    if (e.def.aura) this.endCall(e);
     if (e.elite) {
       // il guardiano lascia un forziere gratuito
       this.interactables.push({ kind: 'chest', x: e.x, z: e.z, y: this.world.height(e.x, e.z), used: false, charge: 0, free: true });
@@ -536,6 +572,26 @@ export class Game {
       for (let i = 0; i < 2; i++) this.spawnPickup('card', 20, e.x + (i ? 2 : -2), e.z);
       const last = this.stagesCleared + 1 >= TUNING.stagesToWin;
       this.hooks.banner(last ? 'Progetto consegnato! Ritira il JOscar e prendi l\'ascensore per chiudere.' : 'Boss sconfitto! Ritira il JOscar: l\'ascensore porta al prossimo progetto.', 'good');
+    }
+  }
+
+  /**
+   * Chiamata terminata: sbuffo sulla call e su ogni nemico che perde la cuffietta (non coperto da un'altra call aperta).
+   * Le riduzioni si azzerano al prossimo updateEnemies, cioè entro un frame.
+   */
+  private endCall(call: Enemy) {
+    this.spawnFx('call_puff', call.x, call.y, call.z, { size0: 1.2, size1: 2.6, life: 0.4 });
+    this.audio.play('callEnd');
+    const r2 = call.def.aura!.radius ** 2;
+    let puffs = TUNING.call.headsetMax;
+    for (const e of this.enemies) {
+      if (puffs <= 0) break;
+      if (!e.alive || e.reduction <= 0 || (e.x - call.x) ** 2 + (e.z - call.z) ** 2 > r2) continue;
+      let covered = false;
+      for (const a of this.openAuras) if (a !== call && a.alive && (e.x - a.x) ** 2 + (e.z - a.z) ** 2 <= a.def.aura!.radius ** 2) covered = true;
+      if (covered) continue;
+      puffs--;
+      this.spawnFx('call_puff', e.x, e.y + e.height + 0.25, e.z, { size0: 0.4, size1: 1, life: 0.3, alpha: 0.9 });
     }
   }
 
@@ -744,6 +800,13 @@ export class Game {
       this.spawnEnemy(def);
       this.hooks.banner(`Guardiano in arrivo: ${def.name}`, 'warn');
     }
+    // Call di Gruppo a tempo: dalla prima ogni `every` s, mai col boss in campo; al limite si salta un giro
+    const c = TUNING.call;
+    const k = Math.min(this.stage, c.first.length - 1);
+    if (t >= c.first[k] && !this.boss && (this.callT -= dt) <= 0) {
+      this.callT = c.every[k];
+      this.spawnCall();
+    }
     // sciami
     for (const at of TUNING.swarmAt) {
       if (t >= at && !this.swarmsDone.has(at)) {
@@ -828,8 +891,18 @@ export class Game {
       this.navT = 0.25;
       nav.flood(p.x, p.z, NAV_RADIUS);
     }
+    this.updateAuras(dt);
+    const open = this.openAuras;
     for (const e of this.enemies) {
       if (!e.alive) continue;
+      // in call: solo i nemici normali dentro un anello aperto; più anelli non si sommano
+      e.reduction = 0;
+      if (open.length && !e.elite && !e.boss && !e.def.aura) {
+        for (const a of open) {
+          const au = a.def.aura!;
+          if ((e.x - a.x) ** 2 + (e.z - a.z) ** 2 <= au.radius * au.radius && au.reduction > e.reduction) e.reduction = au.reduction;
+        }
+      }
       let dx = p.x - e.x;
       let dz = p.z - e.z;
       let d = Math.hypot(dx, dz) || 1;
@@ -934,6 +1007,24 @@ export class Game {
       const reach = e.radius + TUNING.playerRadius;
       if (!frozen && d < reach && p.y < e.y + e.height * 0.75 && p.y + 1.6 > e.y) this.hurtPlayer(e.damage);
     }
+  }
+
+  /**
+   * Anelli dei nemici con aura: si aprono `aura.delay` s dopo lo spawn e restano chiusi finché il nemico è in lista d'attesa (NGH).
+   * Toglie dall'elenco quelli morti senza allocare (al massimo poche call vive).
+   */
+  private updateAuras(dt: number) {
+    const all = this.auras;
+    const open = this.openAuras;
+    open.length = 0;
+    let n = 0;
+    for (const a of all) {
+      if (!a.alive) continue;
+      all[n++] = a;
+      if (a.auraT > 0) a.auraT -= dt;
+      else if (a.frozen <= 0) open.push(a);
+    }
+    all.length = n;
   }
 
   private updateHostile(dt: number) {
@@ -1251,6 +1342,9 @@ export class Game {
     const p = this.player;
     const t = this.runTime;
 
+    // anelli delle Call di Gruppo aperte, sotto tutte le altre ombre (non durante lo squillo né in lista d'attesa)
+    for (const a of this.openAuras) if (a.alive) shadows.ring(a.x, a.z, a.def.aura!.radius, this.world, t * 0.15);
+
     // giocatore: rimbalzo mentre cammina, lampeggia quando è invulnerabile
     const bob = p.moving && p.grounded ? Math.abs(Math.sin(p.anim * 12)) * 0.15 : 0;
     const blink = p.invuln > 0 && Math.sin(t * 50) > 0;
@@ -1261,14 +1355,24 @@ export class Game {
     shadows.push(c.x, this.world.height(c.x, c.z), c.z, 0.7);
 
     const ticket = this.frame('ngh_ticket');
+    let headset: Frame | null = null; // preso solo se c'è almeno un nemico in call
+    let headsets = TUNING.call.headsetMax;
     for (const e of this.enemies) {
       const fr = e.frozen > 0;
       const squash = fr ? 1 : 1 + Math.sin(e.phase) * 0.06;
       // in lista d'attesa: tinta verde acqua (flash negativo), lampeggia nell'ultimo secondo
       const tint = fr && e.flash < 0.3 && !(e.frozen < 1 && Math.sin(t * 30) > 0) ? -0.75 : e.flash;
-      solid.push(e.frame, e.x, e.y, e.z, e.height * squash, e.face, tint, 1, fr ? 0 : Math.sin(e.phase * 0.5) * 0.08, 1 / squash);
+      const ef = e.anim && !fr ? e.anim[Math.floor(t * 8 + e.id) % e.anim.length] : e.frame;
+      solid.push(ef, e.x, e.y, e.z, e.height * squash, e.face, tint, 1, fr ? 0 : Math.sin(e.phase * 0.5) * 0.08, 1 / squash);
       shadows.push(e.x, e.y - (e.def.hover ?? 0), e.z, e.radius * 2.2);
-      if (fr && e.frozen > 0.3) solid.push(ticket, e.x, e.y + e.height + 0.15 + Math.sin(t * 3 + e.id) * 0.08, e.z, e.boss ? 1.5 : 0.7, 1, 0, 1, Math.sin(t * 2 + e.id) * 0.15);
+      // in call: cuffietta piccola e ferma sopra la testa (il biglietto NGH, se c'è, sale sopra di lei)
+      const call = e.reduction > 0 && headsets > 0;
+      if (call) {
+        headsets--;
+        headset ??= this.frame('call_headset');
+        solid.push(headset, e.x, e.y + e.height + 0.05, e.z, 0.42, 1, 0, 1, 0);
+      }
+      if (fr && e.frozen > 0.3) solid.push(ticket, e.x, e.y + e.height + (call ? 0.55 : 0.15) + Math.sin(t * 3 + e.id) * 0.08, e.z, e.boss ? 1.5 : 0.7, 1, 0, 1, Math.sin(t * 2 + e.id) * 0.15);
     }
     for (const pr of this.projectiles) {
       const f = pr.anim ? pr.anim[Math.floor(pr.life * 16) % pr.anim.length] : pr.frame;

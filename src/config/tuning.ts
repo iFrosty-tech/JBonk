@@ -21,6 +21,14 @@ export const TUNING = {
   spawnRateGrowth: 0.014, // +nemici/s per ogni secondo
   maxEnemies: 280,
   eliteEvery: 80, // secondi
+  // Call di Gruppo, a tempo come gli élite; valori per progetto giocato (1°, 2°, 3°)
+  call: {
+    enemy: 'call',
+    first: [75, 60, 45], // secondi dall'inizio della giornata alla prima call
+    every: [40, 35, 30], // secondi tra una call e la successiva
+    maxAlive: [2, 2, 3], // call vive insieme al massimo
+    headsetMax: 40, // cuffiette disegnate al massimo per frame
+  },
   swarmAt: [120, 240],
   chestCount: 7,
   shrineCount: 3,

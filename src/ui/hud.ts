@@ -224,7 +224,8 @@ export class Hud {
       const x = (this.v.x * 0.5 + 0.5) * cw;
       const y = (-this.v.y * 0.5 + 0.5) * ch;
       const a = Math.min(1, n.life * 3);
-      const size = n.crit ? 24 : 17;
+      // colpo su un nemico in call: più piccolo, così "fai meno danno" si legge anche senza il colore
+      const size = n.small ? (n.crit ? 20 : 14) : n.crit ? 24 : 17;
       ctx.globalAlpha = a;
       ctx.font = `700 ${size}px 'IBM Plex Mono', ui-monospace, monospace`;
       ctx.lineWidth = 4;
@@ -246,17 +247,17 @@ export class Hud {
     const yaw = g.rig.yaw;
     const cos = Math.cos(yaw);
     const sin = Math.sin(yaw);
-    // ruota la mappa così che "avanti" (camera) sia in alto
-    const proj = (x: number, z: number, clamp: boolean): [number, number] | null => {
+    // ruota la mappa così che "avanti" (camera) sia in alto; `edge` = distanza dal bordo dei segnali agganciati
+    const proj = (x: number, z: number, clamp: boolean, edge = 10): [number, number] | null => {
       const dx = x - p.x;
       const dz = z - p.z;
       let sx = (dx * cos - dz * sin) * k;
       let sy = (dx * sin + dz * cos) * k;
       const d = Math.hypot(sx, sy);
-      if (d > R - 10) {
+      if (d > R - edge) {
         if (!clamp) return null;
-        sx *= (R - 10) / d;
-        sy *= (R - 10) / d;
+        sx *= (R - edge) / d;
+        sy *= (R - edge) / d;
       }
       return [R + sx, R + sy];
     };
@@ -301,7 +302,7 @@ export class Hud {
 
     ctx.fillStyle = 'rgba(232,85,78,0.9)';
     for (const e of g.enemies) {
-      if (e.boss || e.elite) continue;
+      if (e.boss || e.elite || e.def.aura) continue;
       const q = proj(e.x, e.z, false);
       if (q) ctx.fillRect(q[0] - 3, q[1] - 3, 6, 6);
     }
@@ -350,6 +351,32 @@ export class Hud {
       if (!q) continue;
       const f = this.atlas.get(pl.icon);
       ctx.drawImage(this.atlas.canvas, f.cx * 128, f.cy * 128, 128, 128, q[0] - 15, q[1] - 26, 30, 30);
+    }
+    // Call di Gruppo: fumetto di chat lilla col bordo bianco, agganciato al bordo come gli élite (è un bersaglio da andare a prendere)
+    for (const e of g.enemies) {
+      if (!e.def.aura) continue;
+      const q = proj(e.x, e.z, true, 16);
+      if (!q) continue;
+      const [x, y] = q;
+      const l = x - 12; // fumetto 24×20 con angoli da 6 e la coda in basso a sinistra, in un solo tracciato
+      const r = x + 12;
+      const t = y - 12;
+      const b = y + 8;
+      ctx.fillStyle = '#b9bbff';
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(l + 6, t);
+      ctx.arcTo(r, t, r, b, 6);
+      ctx.arcTo(r, b, l, b, 6);
+      ctx.lineTo(x - 1, b);
+      ctx.lineTo(x - 9, b + 6);
+      ctx.lineTo(x - 6, b);
+      ctx.arcTo(l, b, l, t, 6);
+      ctx.arcTo(l, t, r, t, 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
     }
     for (const e of g.enemies) {
       if (!e.boss && !e.elite) continue;

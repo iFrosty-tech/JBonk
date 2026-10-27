@@ -17,7 +17,9 @@ type Sfx =
   | 'pop'
   | 'ping'
   | 'fanfare'
-  | 'keypress';
+  | 'keypress'
+  | 'notify'
+  | 'callEnd';
 
 /** Intervallo minimo (s) tra due suoni uguali; chi non è in tabella usa 0,02 s. */
 const MIN_GAP: Partial<Record<Sfx, number>> = {
@@ -25,6 +27,8 @@ const MIN_GAP: Partial<Record<Sfx, number>> = {
   pop: 0.05,
   pickup: 0.03,
   keypress: 1, // Vim in INSERT: chi si ferma spesso non deve sentirlo di continuo
+  notify: 1.5, // Call di Gruppo: le call compaiono a ripetizione (GDD §1)
+  callEnd: 0.3, // più call distrutte nello stesso istante fanno un suono solo
 };
 
 export class Audio {
@@ -122,7 +126,37 @@ export class Audio {
         this.click(0.09);
         this.tone(240, 150, 0.035, 'triangle', 0.035, 0.006); // il fondo corsa del tasto
         break;
+      case 'notify': // Call di Gruppo: "hai un messaggio in chat". Due gocce che salgono di una quinta (Sol5 → Re6)
+        this.pluck(784, 0.16, 0.18, 0, 'sine', 0.9);
+        this.pluck(1568, 0.08, 0.05, 0, 'sine', 0.9); // l'ottava dà il timbro di campanella
+        this.pluck(1175, 0.26, 0.18, 0.1, 'sine', 0.9);
+        this.pluck(2350, 0.1, 0.05, 0.1, 'sine', 0.9);
+        break;
+      case 'callEnd': // chiamata terminata: due note che scendono (Re5 → La4), più basse e morbide della notifica
+        this.pluck(587, 0.12, 0.1, 0, 'triangle', 1);
+        this.pluck(440, 0.22, 0.1, 0.11, 'triangle', 1.04); // la seconda cala nella nota, come un telefono che riattacca
+        break;
     }
+  }
+
+  /**
+   * Nota pizzicata: attacco di 4 ms (niente clic), l'altezza parte da `from`·f e ci arriva in 20 ms,
+   * poi coda esponenziale. `from` < 1 sale come una goccia, > 1 cala.
+   */
+  private pluck(f: number, dur: number, vol: number, delay: number, type: OscillatorType, from: number) {
+    const ctx = this.ctx!;
+    const t = ctx.currentTime + delay;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f * from, t);
+    o.frequency.exponentialRampToValueAtTime(f, t + 0.02);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(this.master!);
+    o.start(t);
+    o.stop(t + dur + 0.02);
   }
 
   /** Clic di tasto meccanico: rumore filtrato attorno ai 3-4 kHz, timbro e altezza un po' diversi a ogni colpo. */

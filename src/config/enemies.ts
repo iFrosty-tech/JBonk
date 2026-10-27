@@ -11,6 +11,12 @@ const list: EnemyDef[] = [
   { id: 'auditor', name: 'Auditor', sprite: 'en_auditor', hp: 45, speed: 3.9, damage: 12, radius: 0.75, height: 2.6, xp: 3, gold: 0.2 },
   { id: 'cr', name: 'Change Request', sprite: 'en_cr', hp: 22, speed: 5.2, damage: 8, radius: 0.65, height: 1.8, xp: 2, gold: 0.12 },
 
+  // Nemico di supporto: compare a tempo (TUNING.call), non nei roster dei biomi
+  {
+    id: 'call', name: 'Call di Gruppo', sprite: 'en_call', hp: 80, speed: 3.4, damage: 5, radius: 0.6, height: 2, xp: 3, gold: 0.2, hover: 1.2,
+    aura: { radius: 6, reduction: 0.3, delay: 1 },
+  },
+
   // Élite ("guardiani"): lasciano un forziere gratis
   { id: 'scope', name: 'Scope Creep', sprite: 'en_scope', hp: 650, speed: 3.6, damage: 22, radius: 1.8, height: 4.6, xp: 40, gold: 1, kind: 'elite' },
   { id: 'legacy', name: 'Codice Legacy', sprite: 'en_legacy', hp: 800, speed: 3.0, damage: 26, radius: 1.8, height: 4.6, xp: 45, gold: 1, kind: 'elite' },
