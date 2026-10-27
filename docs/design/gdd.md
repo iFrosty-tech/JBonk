@@ -103,7 +103,7 @@ Sprite e anello disegnati via codice (`src/render/logos/` o `atlas.ts`), tutto n
 Voce in `src/config/enemies.ts`:
 
 ```ts
-{ id: 'call', name: 'Call di Gruppo', sprite: 'en_call', hp: 80, speed: 3.4, damage: 5, radius: 0.6, height: 1.6, xp: 3, gold: 0.2, hover: 1.2,
+{ id: 'call', name: 'Call di Gruppo', sprite: 'en_call', hp: 80, speed: 3.4, damage: 5, radius: 0.6, height: 2, xp: 3, gold: 0.2, hover: 1.2, // height 2 (era 1,6): decisione di Marco in fase 2, a 1,6 sul telefono si perdeva nell'orda
   aura: { radius: 6, reduction: 0.3, delay: 1 } }
 ```
 

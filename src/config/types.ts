@@ -49,6 +49,13 @@ export interface BossPattern {
   quote: string; // frase mostrata quando compare
 }
 
+/** Aura di un nemico di supporto (Call di Gruppo): i nemici normali dentro l'anello subiscono meno danno. */
+export interface EnemyAura {
+  radius: number; // raggio dell'anello (unità mondo)
+  reduction: number; // 0..1, quota di danno tolta; più anelli non si sommano
+  delay: number; // secondi dallo spawn prima che l'anello si apra
+}
+
 export interface EnemyDef {
   id: string;
   name: string;
@@ -63,6 +70,8 @@ export interface EnemyDef {
   hover?: number; // se vola, a che altezza
   kind?: 'normal' | 'elite' | 'boss';
   boss?: BossPattern;
+  /** Solo nemici di supporto: protegge i nemici normali vicini. Mai su élite, boss o altri nemici con aura. */
+  aura?: EnemyAura;
 }
 
 export type PropType =

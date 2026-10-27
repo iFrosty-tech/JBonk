@@ -76,7 +76,7 @@ su iPhone si ottiene aggiungendo la pagina alla schermata Home.
   <img src="docs/media/mobile.png" alt="JBonk su telefono in orizzontale, al tramonto tra la piscina e i campi in terra rossa: joystick sotto il pollice sinistro, pulsanti Salta e Scatto a destra, HUD compatto" width="640">
 </p>
 
-Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti, `T` +1 ora, `O` +100 €, `N` nuova arma (prima le ultime aggiunte), `C` carta Soldo, `F` onda del radar NGH, `J` statuetta JOscar.
+Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti, `T` +1 ora, `O` +100 €, `N` nuova arma (prima le ultime aggiunte), `C` carta Soldo, `F` onda del radar NGH, `J` statuetta JOscar, `V` passivo Scorciatoie di Vim (un livello a ogni pressione), `Y` una Call di Gruppo davanti al giocatore.
 
 ## Il loop di gioco
 
@@ -278,6 +278,7 @@ dati in `maps/types.ts`.
   - **JPanik**: gli 8 esagoni del logo misurati sull'originale e ridisegnati, ognuno anche come sprite a sé. È l'arma *Alveare JPanik*: un alveare con la forma del logo segue il giocatore, gli esagoni si staccano (prismi che si ribaltano in volo), inseguono i nemici, esplodono e ricrescono al loro posto.
   - **NGH · NextGenerationHIS**: il simbolo del logo ridisegnato in vettoriale (lo spicchio gira come il fascio di un radar, con la scia e i "bip") e la scritta originale (`assets/ngh-text.webp`), su un totem eliminacode che stampa i numeri. È il *Totem NGH*: i nemici in attesa diventano verde acqua e tengono in mano il loro biglietto.
   - **JOscar**: la statuetta originale (`assets/joscar.webp`, oro e base separati) con un riflesso che scorre solo sull'oro e la targhetta "JOSCAR" sulla base. Intorno: fasci di luce da palco, scintille e coriandoli per la premiazione.
+  - **Teams**: il logo del 2025 ridisegnato in vettoriale (le due figure dal celeste al viola e la tessera con la T), con le onde "in chiamata" in 6 fotogrammi, più la cuffietta lilla e lo sbuffo di fine chiamata. È il nemico *Call di Gruppo*: i nemici normali dentro il suo anello tratteggiato a terra (disegnato sulla batch delle ombre, senza draw call in più) sono "in call" e prendono meno danno.
 - Per aggiungere un logo: crea un file in `render/logos/` che esporta i suoi `SpriteDef` e aggiungilo all'elenco in `logos/index.ts`. Se è raster, metti l'immagine in `src/assets` e registrala in `logos/images.ts`, poi disegnala con `images.get(...)`. Per i loghi vettoriali basta ridisegnarli su canvas (con `Path2D` si possono usare direttamente i path SVG).
 
 ## Come aggiungere un'arma o un passivo

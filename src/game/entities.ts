@@ -23,6 +23,7 @@ export interface Enemy {
   id: number;
   def: EnemyDef;
   frame: Frame;
+  anim: Frame[] | null; // se lo sprite ha più fotogrammi, gira in loop (es. le onde della Call di Gruppo)
   x: number;
   y: number;
   z: number;
@@ -40,6 +41,8 @@ export interface Enemy {
   alive: boolean;
   frozen: number; // secondi rimasti "in lista d'attesa" (totem NGH)
   lost: number; // secondi passati senza strada verso il giocatore (es. in un cortile chiuso)
+  reduction: number; // quota di danno tolta perché è "in call" (anello di una Call di Gruppo), 0 = nessuna
+  auraT: number; // solo nemici con aura: secondi prima che l'anello si apra
   elite: boolean;
   boss: boolean;
   // solo boss
@@ -133,6 +136,7 @@ export interface DamageNumber {
   life: number;
   crit: boolean;
   color: string;
+  small: boolean; // colpo su un nemico in call: l'HUD lo disegna più piccolo
 }
 
 export interface Card {

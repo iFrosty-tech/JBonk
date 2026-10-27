@@ -9,9 +9,11 @@ import { MONGO_SPRITES } from './mongo';
 import { NGH_SPRITES } from './ngh';
 import { SOLDO_SPRITES } from './soldo';
 import { SPRING_SPRITES } from './spring';
+import { TEAMS_SPRITES } from './teams';
 
 // Sprite animati ricavati dai loghi di tecnologie, clienti e premi aziendali: un file per logo.
-// - Claude, Angular, GPI, gli esagoni di JPanik e il radar di NGH sono ridisegnati in vettoriale.
+// - Claude, Angular, GPI, gli esagoni di JPanik, il radar di NGH e la Call di Gruppo (ispirata
+//   al logo di Teams) sono ridisegnati in vettoriale.
 // - Java, Soldo, Spring, MongoDB, la scritta NGH e il JOscar partono dalle immagini in src/assets
 //   (caricate da images.ts), a volte scomposte in parti che si muovono ognuna per conto suo.
 // `frames` è la lunghezza del ciclo: il gioco sceglie il fotogramma in base al tempo.
@@ -30,6 +32,7 @@ export const LOGO_SPRITES: SpriteDef[] = [
   ...JPANIK_SPRITES,
   ...NGH_SPRITES,
   ...JOSCAR_SPRITES,
+  ...TEAMS_SPRITES,
 ];
 
 /** Alveari per l'arma 'swarm', per id dello sprite. */
