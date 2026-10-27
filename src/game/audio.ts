@@ -19,7 +19,9 @@ type Sfx =
   | 'fanfare'
   | 'keypress'
   | 'notify'
-  | 'callEnd';
+  | 'callEnd'
+  | 'shutdown'
+  | 'reboot';
 
 /** Intervallo minimo (s) tra due suoni uguali; chi non è in tabella usa 0,02 s. */
 const MIN_GAP: Partial<Record<Sfx, number>> = {
@@ -29,6 +31,8 @@ const MIN_GAP: Partial<Record<Sfx, number>> = {
   keypress: 1, // Vim in INSERT: chi si ferma spesso non deve sentirlo di continuo
   notify: 1.5, // Call di Gruppo: le call compaiono a ripetizione (GDD §1)
   callEnd: 0.3, // più call distrutte nello stesso istante fanno un suono solo
+  shutdown: 0.5, // Aggiornamento: al massimo 2 vivi e uno ogni ~30 s, il limite serve solo contro i doppi contatti
+  reboot: 0.5,
 };
 
 export class Audio {
@@ -135,6 +139,14 @@ export class Audio {
       case 'callEnd': // chiamata terminata: due note che scendono (Re5 → La4), più basse e morbide della notifica
         this.pluck(587, 0.12, 0.1, 0, 'triangle', 1);
         this.pluck(440, 0.22, 0.1, 0.11, 'triangle', 1.04); // la seconda cala nella nota, come un telefono che riattacca
+        break;
+      case 'shutdown': // Aggiornamento: l'arma si spegne. Clic del tasto di accensione e tono che si spegne verso il La4
+        this.click(0.07);
+        this.tone(1320, 440, 0.34, 'triangle', 0.16);
+        break;
+      case 'reboot': // l'arma torna: due note che salgono di un'ottava (Mi5 → Mi6), più lente della notifica, triangolo e non quadra come la moneta
+        this.pluck(659, 0.12, 0.13, 0, 'triangle', 0.95);
+        this.pluck(1319, 0.3, 0.14, 0.15, 'triangle', 0.95);
         break;
     }
   }

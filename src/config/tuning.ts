@@ -21,13 +21,18 @@ export const TUNING = {
   spawnRateGrowth: 0.014, // +nemici/s per ogni secondo
   maxEnemies: 280,
   eliteEvery: 80, // secondi
-  // Call di Gruppo, a tempo come gli élite; valori per progetto giocato (1°, 2°, 3°)
+  // Nemici a tempo, come gli élite e mai col boss in campo. Valori per progetto giocato (1°, 2°, 3°):
+  // con meno valori vale l'ultimo. `every` ± `jitter` secondi tra uno spawn e il successivo; al limite di vivi si salta un giro.
+  timed: [
+    { enemy: 'call', first: [75, 60, 45], every: [40, 35, 30], jitter: 0, maxAlive: [2, 2, 3] }, // Call di Gruppo
+    { enemy: 'update', first: [90], every: [30], jitter: 5, maxAlive: [2] }, // Aggiornamento
+  ],
   call: {
-    enemy: 'call',
-    first: [75, 60, 45], // secondi dall'inizio della giornata alla prima call
-    every: [40, 35, 30], // secondi tra una call e la successiva
-    maxAlive: [2, 2, 3], // call vive insieme al massimo
     headsetMax: 40, // cuffiette disegnate al massimo per frame
+  },
+  update: {
+    lockTime: 6, // secondi in aggiornamento per l'arma colpita
+    truce: 8, // secondi senza nuovi blocchi dopo un riavvio
   },
   swarmAt: [120, 240],
   chestCount: 7,

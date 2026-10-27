@@ -63,6 +63,18 @@ const NAV_RADIUS = 60; // celle (da 2 unità) intorno al giocatore in cui i nemi
 const RELOCATE_DIST = 95; // i nemici rimasti troppo indietro ricompaiono vicino al giocatore
 const IN_CALL_COLOR = '#b9bbff'; // numeri di danno sui nemici in call (lilla chiaro, come il segnale in minimappa)
 
+/** Valore per il progetto giocato `stage` (0, 1, 2…): oltre la fine dell'elenco vale l'ultimo. */
+function byStage(values: readonly number[], stage: number) {
+  return values[Math.min(stage, values.length - 1)];
+}
+
+/** Evento per le icone sopra il giocatore: arma messa in aggiornamento o riavviata. Lo legge l'HUD. */
+export interface LockEvent {
+  icon: string; // icona dell'arma
+  reboot: boolean; // false = appena bloccata, true = riavviata
+  time: number; // runTime dell'evento
+}
+
 export class Game {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
@@ -129,8 +141,13 @@ export class Game {
   /** Nemici con aura (Call di Gruppo) vivi; `openAuras` = quelli con l'anello aperto in questo frame. */
   private auras: Enemy[] = [];
   private readonly openAuras: Enemy[] = [];
-  private callT = 0; // secondi alla prossima Call di Gruppo a tempo
-  private callAnnounced = false; // banner già mostrato in questa partita
+  private readonly timedT: number[] = TUNING.timed.map(() => 0); // secondi al prossimo nemico a tempo, per voce di TUNING.timed
+  private callAnnounced = false; // banner della Call di Gruppo già mostrato in questa partita
+  /** Aggiornamento: ultimo evento per le icone sopra il giocatore (null = nessuno in questo progetto). */
+  lockEvent: LockEvent | null = null;
+  private lockAnnounced = false; // banner del primo aggiornamento già mostrato
+  private lastLocked: WeaponInstance | null = null; // mai la stessa arma due volte di fila
+  private truce = 0; // secondi di tregua dopo un riavvio
 
   constructor(
     readonly atlas: Atlas,
@@ -188,7 +205,11 @@ export class Game {
     this.eliteT = 0;
     this.auras.length = 0;
     this.openAuras.length = 0;
-    this.callT = 0;
+    this.timedT.fill(0);
+    // progetto nuovo: l'aggiornamento in corso si interrompe, senza riavvio da mostrare
+    for (const w of this.weapons) w.locked = 0;
+    this.lockEvent = null;
+    this.truce = 0;
     this.swarmsDone.clear();
 
     // i locali della mappa reale: pausa pranzo nei ristoranti, macchinetta del caffè nei bar
@@ -452,21 +473,25 @@ export class Game {
   }
 
   /**
-   * Fa comparire una Call di Gruppo (in (x, z) o in un punto di spawn), se non si è già al limite di call vive.
-   * Suona la notifica; alla prima call della partita mostra il banner con la riduzione letta dalla configurazione.
+   * Fa comparire un nemico a tempo di `TUNING.timed` (in (x, z) o in un punto di spawn), se non si è già al limite di vivi
+   * (`ignoreLimit` solo per le scorciatoie di test). La Call di Gruppo suona la notifica e alla prima della partita mostra il banner.
    */
-  spawnCall(x?: number, z?: number): Enemy | null {
-    const c = TUNING.call;
-    const def = ENEMIES[c.enemy];
-    const k = Math.min(this.stage, c.maxAlive.length - 1);
-    let alive = 0;
-    for (const a of this.auras) if (a.alive && a.def === def) alive++;
-    if (alive >= c.maxAlive[k]) return null;
+  spawnTimed(id: string, x?: number, z?: number, ignoreLimit = false): Enemy | null {
+    const cfg = TUNING.timed.find((c) => c.enemy === id);
+    const def = ENEMIES[id];
+    if (!cfg || !def) return null;
+    if (!ignoreLimit) {
+      let alive = 0;
+      for (const e of this.enemies) if (e.alive && e.def === def) alive++;
+      if (alive >= byStage(cfg.maxAlive, this.stage)) return null;
+    }
     const e = this.spawnEnemy(def, x, z);
-    this.audio.play('notify');
-    if (!this.callAnnounced && def.aura) {
-      this.callAnnounced = true;
-      this.hooks.banner(`Chi è in call prende -${Math.round(def.aura.reduction * 100)}% danno`, 'warn');
+    if (def.aura) {
+      this.audio.play('notify');
+      if (!this.callAnnounced) {
+        this.callAnnounced = true;
+        this.hooks.banner(`Chi è in call prende -${Math.round(def.aura.reduction * 100)}% danno`, 'warn');
+      }
     }
     return e;
   }
@@ -502,7 +527,10 @@ export class Game {
   // ---------------------------------------------------------------- danni
 
   damageEnemy(e: Enemy, base: number, w: WeaponInstance | null, kx: number, kz: number) {
-    if (!e.alive) return;
+    // Aggiornamento: dal momento del blocco tutto ciò che appartiene all'arma (proiettili, fulmini prenotati, tazze, pozze,
+    // dischi, api) finisce la traiettoria a vista ma non fa danno né numeri. Al riavvio riparte normale: anche una pozza
+    // nata prima del blocco e ancora a terra torna a fare danno.
+    if (!e.alive || (w && w.locked > 0)) return;
     const s = this.stats;
     let dmg = base * s.damage;
     const crit = Math.random() < s.critChance;
@@ -595,7 +623,54 @@ export class Game {
     }
   }
 
-  private hurtPlayer(raw: number) {
+  /**
+   * Contatto con un nemico con `onTouch` (Aggiornamento). Lo scatto lo evita del tutto; `G` e armatura fermano solo il danno.
+   * Il nemico si consuma anche quando nessuna arma può andare in aggiornamento.
+   */
+  private touchPlayer(e: Enemy) {
+    if (this.player.dashT > 0) return;
+    const t = e.def.onTouch!;
+    const locked = t.lockWeapon && this.lockWeapon();
+    this.hurtPlayer(e.damage, !locked); // sul contatto che blocca un'arma suona solo lo spegnimento
+    if (!t.consume) return;
+    e.alive = false; // niente killEnemy: né XP né drop
+    if (t.fx) this.spawnFx(t.fx, e.x, e.y + e.height * 0.5, e.z, { size0: 1.2, size1: 2.8, life: 0.25 });
+  }
+
+  /**
+   * Mette in aggiornamento un'arma a caso, mai la stessa due volte di fila. Niente blocco con una sola arma,
+   * con un'altra arma già in aggiornamento o durante la tregua dopo un riavvio.
+   */
+  private lockWeapon(): boolean {
+    const ws = this.weapons;
+    if (ws.length < 2 || this.truce > 0 || ws.some((w) => w.locked > 0)) return false;
+    const pool = ws.filter((w) => w !== this.lastLocked);
+    const w = pool[Math.floor(Math.random() * pool.length)];
+    w.locked = TUNING.update.lockTime;
+    this.lastLocked = w;
+    this.lockEvent = { icon: w.def.icon, reboot: false, time: this.runTime };
+    this.audio.play('shutdown');
+    if (!this.lockAnnounced) {
+      this.lockAnnounced = true;
+      this.hooks.banner('Un\'arma si sta aggiornando!', 'warn');
+    }
+    return true;
+  }
+
+  /** Scala i blocchi: al riavvio l'arma attacca subito, compare l'icona con la ✓, suona il riavvio e parte la tregua. */
+  private updateLocks(dt: number) {
+    if (this.truce > 0) this.truce -= dt;
+    for (const w of this.weapons) {
+      if (w.locked <= 0 || (w.locked -= dt) > 0) continue;
+      w.locked = 0;
+      w.timer = 0;
+      this.truce = TUNING.update.truce;
+      this.lockEvent = { icon: w.def.icon, reboot: true, time: this.runTime };
+      this.audio.play('reboot');
+    }
+  }
+
+  private hurtPlayer(raw: number, sound = true) {
     const p = this.player;
     if (p.invuln > 0 || p.dashT > 0 || this.god) return;
     const dmg = Math.max(1, Math.round(raw - this.stats.armor));
@@ -603,7 +678,7 @@ export class Game {
     p.invuln = TUNING.hurtInvuln;
     this.hurtFlash = 1;
     this.rig.shake = Math.max(this.rig.shake, 0.3);
-    this.audio.play('hurt');
+    if (sound) this.audio.play('hurt');
     if (p.hp <= 0) this.endRun(false);
   }
 
@@ -651,6 +726,7 @@ export class Game {
     this.hash.clear(this.enemies.length);
     for (let i = 0; i < this.enemies.length; i++) this.hash.insert(i, this.enemies[i].x, this.enemies[i].z);
 
+    this.updateLocks(dt);
     for (const w of this.weapons) updateWeapon(w, this, dt);
     this.updateProjectiles(dt);
     this.updateEnemies(dt);
@@ -800,12 +876,12 @@ export class Game {
       this.spawnEnemy(def);
       this.hooks.banner(`Guardiano in arrivo: ${def.name}`, 'warn');
     }
-    // Call di Gruppo a tempo: dalla prima ogni `every` s, mai col boss in campo; al limite si salta un giro
-    const c = TUNING.call;
-    const k = Math.min(this.stage, c.first.length - 1);
-    if (t >= c.first[k] && !this.boss && (this.callT -= dt) <= 0) {
-      this.callT = c.every[k];
-      this.spawnCall();
+    // nemici a tempo (Call di Gruppo, Aggiornamento): dal primo ogni `every` ± `jitter` s, mai col boss; al limite si salta un giro
+    for (let i = 0; i < TUNING.timed.length && !this.boss; i++) {
+      const c = TUNING.timed[i];
+      if (t < byStage(c.first, this.stage) || (this.timedT[i] -= dt) > 0) continue;
+      this.timedT[i] = byStage(c.every, this.stage) + (Math.random() * 2 - 1) * c.jitter;
+      this.spawnTimed(c.enemy);
     }
     // sciami
     for (const at of TUNING.swarmAt) {
@@ -866,9 +942,10 @@ export class Game {
         const dz = e.z - pr.z;
         if (dx * dx + dz * dz > (pr.radius + e.radius) ** 2) continue;
         if (pr.hits.includes(e.id)) continue;
+        const w = this.weapons.find((x) => x.def.id === pr.weapon) ?? null;
+        if (w && w.locked > 0) continue; // arma in aggiornamento: il proiettile finisce la corsa attraversando i nemici
         pr.hits.push(e.id);
         const sp = Math.hypot(pr.vx, pr.vz) || 1;
-        const w = this.weapons.find((x) => x.def.id === pr.weapon) ?? null;
         this.damageEnemy(e, pr.damage, w, (pr.vx / sp) * pr.knock, (pr.vz / sp) * pr.knock);
         if (pr.split > 0 && w) {
           splitProjectile(this, w, pr, e);
@@ -1005,7 +1082,10 @@ export class Game {
 
       // contatto col giocatore (saltando si evitano i nemici bassi)
       const reach = e.radius + TUNING.playerRadius;
-      if (!frozen && d < reach && p.y < e.y + e.height * 0.75 && p.y + 1.6 > e.y) this.hurtPlayer(e.damage);
+      if (!frozen && d < reach && p.y < e.y + e.height * 0.75 && p.y + 1.6 > e.y) {
+        if (e.def.onTouch) this.touchPlayer(e);
+        else this.hurtPlayer(e.damage);
+      }
     }
   }
 
@@ -1362,7 +1442,7 @@ export class Game {
       const squash = fr ? 1 : 1 + Math.sin(e.phase) * 0.06;
       // in lista d'attesa: tinta verde acqua (flash negativo), lampeggia nell'ultimo secondo
       const tint = fr && e.flash < 0.3 && !(e.frozen < 1 && Math.sin(t * 30) > 0) ? -0.75 : e.flash;
-      const ef = e.anim && !fr ? e.anim[Math.floor(t * 8 + e.id) % e.anim.length] : e.frame;
+      const ef = e.anim && !fr ? e.anim[Math.floor(t * (e.def.fps ?? 8) + e.id) % e.anim.length] : e.frame;
       solid.push(ef, e.x, e.y, e.z, e.height * squash, e.face, tint, 1, fr ? 0 : Math.sin(e.phase * 0.5) * 0.08, 1 / squash);
       shadows.push(e.x, e.y - (e.def.hover ?? 0), e.z, e.radius * 2.2);
       // in call: cuffietta piccola e ferma sopra la testa (il biglietto NGH, se c'è, sale sopra di lei)
@@ -1373,6 +1453,9 @@ export class Game {
         solid.push(headset, e.x, e.y + e.height + 0.05, e.z, 0.42, 1, 0, 1, 0);
       }
       if (fr && e.frozen > 0.3) solid.push(ticket, e.x, e.y + e.height + (call ? 0.55 : 0.15) + Math.sin(t * 3 + e.id) * 0.08, e.z, e.boss ? 1.5 : 0.7, 1, 0, 1, Math.sin(t * 2 + e.id) * 0.15);
+      // segnale fermo sopra il nemico (Aggiornamento): sparisce con lui, quando muore o si consuma
+      const badge = e.def.badge;
+      if (badge) solid.push(this.frame(badge.sprite), e.x, e.y - (e.def.hover ?? 0) + badge.y, e.z, badge.size, 1, 0, 1, 0);
     }
     for (const pr of this.projectiles) {
       const f = pr.anim ? pr.anim[Math.floor(pr.life * 16) % pr.anim.length] : pr.frame;

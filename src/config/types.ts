@@ -72,6 +72,26 @@ export interface EnemyDef {
   boss?: BossPattern;
   /** Solo nemici di supporto: protegge i nemici normali vicini. Mai su élite, boss o altri nemici con aura. */
   aura?: EnemyAura;
+  /** Effetto al contatto col giocatore oltre al danno (Aggiornamento). Lo scatto lo evita, `G` e armatura no. */
+  onTouch?: EnemyTouch;
+  /** Sprite animato: fotogrammi al secondo del loop (default 8). */
+  fps?: number;
+  /** Segnale fermo sopra il nemico, per riconoscerlo in mezzo all'orda (Aggiornamento). */
+  badge?: EnemyBadge;
+}
+
+/** Sprite disegnato sopra un nemico finché è vivo. */
+export interface EnemyBadge {
+  sprite: SpriteId;
+  y: number; // quota della base dello sprite, da terra (unità mondo)
+  size: number; // altezza a schermo (unità mondo)
+}
+
+/** Effetto di un nemico quando tocca il giocatore. */
+export interface EnemyTouch {
+  lockWeapon: boolean; // mette in aggiornamento un'arma (regole e durate in TUNING.update)
+  consume: boolean; // sparisce al contatto, senza XP né drop
+  fx?: SpriteId; // effetto quando si consuma (es. un lampo)
 }
 
 export type PropType =
