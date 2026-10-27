@@ -50,6 +50,7 @@ function weaponUpgradeCard(g: Game, w: WeaponInstance, rarity: number): Card {
     rarity,
     level: `Lv ${w.level} → ${w.level + 1}`,
     lines: [upgradeText(u, amt)],
+    updating: w.locked > 0,
     apply: () => {
       w.level++;
       if (u.mode === 'add') w.stats[u.stat] += amt;

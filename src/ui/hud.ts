@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { PASSIVES } from '../config/passives';
 import { TUNING } from '../config/tuning';
 import type { BiomeDef } from '../config/types';
-import type { Game } from '../game/game';
+import type { Game, LockEvent } from '../game/game';
 import type { Atlas } from '../render/atlas';
 
 // HUD in HTML sopra il canvas: si aggiorna solo quando i valori cambiano.
@@ -36,6 +36,10 @@ export class Hud {
   private slots: HTMLDivElement;
   private insert: HTMLDivElement;
   private vimSlot: HTMLElement | null = null;
+  private weaponSlots: HTMLElement[] = [];
+  private lastLock: LockEvent | null = null; // ultimo evento d'aggiornamento visto (lampo dello slot una volta sola)
+  private icons = new Map<string, HTMLCanvasElement>(); // icone dell'atlas per il canvas, a colori e in grigio
+  private readonly reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
   private prompt: HTMLDivElement;
   private hint: HTMLDivElement;
   private banners: HTMLDivElement;
@@ -173,6 +177,35 @@ export class Hud {
       this.insert.classList.toggle('on', g.insertMode);
       this.vimSlot?.classList.toggle('lit', g.insertMode);
     });
+    // arma in aggiornamento: spicchio scuro che si ritira; su desktop anche i secondi (il CSS li nasconde col touch)
+    g.weapons.forEach((w, i) => {
+      const s = this.weaponSlots[i];
+      if (!s) return;
+      const left = w.locked;
+      const frac = Math.min(1, left / TUNING.update.lockTime).toFixed(3);
+      this.set(`lock${i}`, left > 0 ? `${frac}|${Math.ceil(left)}` : '', (v) => {
+        s.classList.toggle('locked', !!v);
+        if (v) {
+          s.style.setProperty('--lock', frac);
+          s.dataset.secs = v.split('|')[1];
+        } else {
+          s.style.removeProperty('--lock');
+          delete s.dataset.secs;
+        }
+      });
+    });
+    // riavvio: lampo verde del bordo dello slot, una volta per evento
+    const ev = g.lockEvent;
+    if (ev !== this.lastLock) {
+      this.lastLock = ev;
+      const s = ev?.reboot ? this.weaponSlots[g.weapons.findIndex((w) => w.def.icon === ev.icon)] : undefined;
+      if (s) {
+        s.classList.remove('reboot');
+        void s.offsetWidth; // riparte l'animazione anche se la classe c'era già
+        s.classList.add('reboot');
+        s.addEventListener('animationend', () => s.classList.remove('reboot'), { once: true });
+      }
+    }
 
     this.drawNumbers(g);
     this.drawMinimap(g);
@@ -181,13 +214,16 @@ export class Hud {
   private renderSlots(g: Game) {
     this.slots.replaceChildren(this.insert);
     this.vimSlot = null;
-    this.cache.delete('insert'); // lo slot di Vim è nuovo: va riacceso al prossimo controllo
+    // slot nuovi: lo stato di Vim e degli aggiornamenti va riapplicato al prossimo controllo
+    for (const k of [...this.cache.keys()]) if (k === 'insert' || k.startsWith('lock')) this.cache.delete(k);
     const mk = (icons: { id: string; icon: string; level: number; title: string }[], max: number) => {
       const row = el('div', 'row', this.slots);
+      const filled: HTMLElement[] = [];
       for (let i = 0; i < max; i++) {
         const it = icons[i];
         const s = el('div', it ? 'slot' : 'slot empty', row);
         if (!it) continue;
+        filled.push(s);
         if (it.id === 'vim') this.vimSlot = s;
         s.title = it.title;
         const ic = el('i', '', s);
@@ -195,8 +231,9 @@ export class Hud {
         const lv = el('em', '', s);
         lv.textContent = String(it.level);
       }
+      return filled;
     };
-    mk(g.weapons.map((w) => ({ id: '', icon: w.def.icon, level: w.level, title: w.def.name })), TUNING.maxWeapons);
+    this.weaponSlots = mk(g.weapons.map((w) => ({ id: '', icon: w.def.icon, level: w.level, title: w.def.name })), TUNING.maxWeapons);
     mk(g.passives.map((p) => ({ id: p.id, icon: PASSIVES[p.id].icon, level: p.level, title: PASSIVES[p.id].name })), TUNING.maxPassives);
   }
 
@@ -235,6 +272,102 @@ export class Hud {
       ctx.fillText(n.text, x, y);
     }
     ctx.globalAlpha = 1;
+    // arma in aggiornamento: la sua icona sopra il giocatore per 1 s al blocco, 0,5 s al riavvio
+    const ev = g.lockEvent;
+    if (ev) {
+      const age = g.runTime - ev.time;
+      const life = ev.reboot ? 0.5 : 1;
+      if (age >= 0 && age < life) this.drawLockIcon(g, ev, age, life, cw, ch);
+    }
+  }
+
+  /** Icona dell'arma sopra la testa: grigia (con un pop) al blocco, a colori con la ✓ verde al riavvio. Niente testo. */
+  private drawLockIcon(g: Game, ev: LockEvent, age: number, life: number, cw: number, ch: number) {
+    const p = g.player;
+    this.v.set(p.x, p.y + 2.2, p.z).project(g.camera);
+    if (this.v.z > 1) return;
+    const touch = g.input.touch;
+    const r = touch ? 15 : 17; // cerchio da 30 / 34 px
+    const s = touch ? 22 : 24; // icona
+    const head = (-this.v.y * 0.5 + 0.5) * ch;
+    let x = (this.v.x * 0.5 + 0.5) * cw;
+    let y = head - r - 12;
+    // mai sotto un banner: sul telefono in orizzontale la fascia dei banner è subito sopra la testa
+    // (il primo blocco porta anche il suo banner), allora l'icona va di fianco alla testa, sotto la fascia
+    if (this.banners.childElementCount) {
+      const c = this.numbers.getBoundingClientRect();
+      let top = Infinity;
+      let bottom = -Infinity;
+      let left = Infinity;
+      let right = -Infinity;
+      for (const b of this.banners.children) {
+        const rb = b.getBoundingClientRect();
+        top = Math.min(top, rb.top - c.top);
+        bottom = Math.max(bottom, rb.bottom - c.top);
+        left = Math.min(left, rb.left - c.left);
+        right = Math.max(right, rb.right - c.left);
+      }
+      if (y - r < bottom + 4 && y + r > top && x + r > left && x - r < right) {
+        x += r + 22;
+        y = Math.max(head + 2, bottom + 4 + r);
+      }
+    }
+    const t = Math.min(1, age / 0.2);
+    const pop = ev.reboot || this.reduceMotion.matches ? 1 : 0.6 + 0.4 * (1 - (1 - t) ** 3);
+    const ctx = this.nctx;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, (life - age) / 0.12); // breve dissolvenza in uscita
+    ctx.translate(x, y);
+    ctx.scale(pop, pop);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(16, 19, 28, 0.85)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = ev.reboot ? '#5dfd8a' : 'rgba(247, 245, 239, 0.85)';
+    ctx.stroke();
+    ctx.drawImage(this.iconCanvas(ev.icon, !ev.reboot), -s / 2, -s / 2, s, s);
+    if (ev.reboot) {
+      // spunta in basso a destra, verde col contorno scuro come i numeri
+      const check = () => {
+        ctx.beginPath();
+        ctx.moveTo(r * 0.3, r * 0.72);
+        ctx.lineTo(r * 0.62, r * 1.02);
+        ctx.lineTo(r * 1.16, r * 0.4);
+      };
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      check();
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = '#10131c';
+      ctx.stroke();
+      check();
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = '#5dfd8a';
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** Icona dell'atlas su un canvas da 64 px (in grigio se `grey`), creata una volta sola. */
+  private iconCanvas(id: string, grey: boolean): HTMLCanvasElement {
+    const key = (grey ? 'g:' : 'c:') + id;
+    let c = this.icons.get(key);
+    if (c) return c;
+    c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const x = c.getContext('2d', { willReadFrequently: grey })!;
+    const f = this.atlas.get(id);
+    x.drawImage(this.atlas.canvas, f.cx * 128, f.cy * 128, f.cw * 128, f.ch * 128, 0, 0, 64, 64);
+    if (grey) {
+      const img = x.getImageData(0, 0, 64, 64);
+      const a = img.data;
+      // grigio un po' schiarito: sul cerchio scuro l'icona spenta deve restare riconoscibile
+      for (let i = 0; i < a.length; i += 4) a[i] = a[i + 1] = a[i + 2] = 40 + 0.85 * (0.2126 * a[i] + 0.7152 * a[i + 1] + 0.0722 * a[i + 2]);
+      x.putImageData(img, 0, 0);
+    }
+    this.icons.set(key, c);
+    return c;
   }
 
   private drawMinimap(g: Game) {

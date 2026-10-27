@@ -685,7 +685,79 @@ const sprites: SpriteDef[] = [
     },
     sticker: false,
   },
+  // Aggiornamento: la scatola con la barra di download (frame k = barra piena per (k+1)/8) e il lampo al contatto
+  { id: 'en_update', cw: 1, ch: 1, frames: 8, draw: (g, _w, _h, i, n) => updateBox(g, (i + 1) / n, i) },
+  {
+    id: 'update_flash', cw: 1, ch: 1,
+    draw: (g) => {
+      const star = (r0: number, r1: number, color: string) => {
+        const pts: number[] = [];
+        for (let k = 0; k < 16; k++) {
+          const a = (k / 16) * Math.PI * 2 - Math.PI / 2;
+          const r = k % 2 ? r0 : r1;
+          pts.push(64 + Math.cos(a) * r, 64 + Math.sin(a) * r);
+        }
+        poly(g, pts, color, false);
+      };
+      star(26, 60, '#fff1a8');
+      star(18, 40, '#ffffff');
+      circ(g, 64, 64, 16, '#ffffff', false);
+    },
+    sticker: false,
+  },
+  {
+    // segnale fermo sopra la scatola: la scatola è bassa e in mezzo all'orda resta coperta
+    id: 'update_badge', cw: 1, ch: 1,
+    draw: (g) => {
+      // verde scuro: in scala di grigi il disco resta più scuro degli sprite bianchi e la freccia risalta
+      circ(g, 64, 64, 54, '#178a34', true, 5);
+      circ(g, 64, 64, 44, '#1fa03f', false);
+      rr(g, 54, 26, 20, 36, 3, '#ffffff', false);
+      poly(g, [36, 58, 92, 58, 64, 88], '#ffffff', false);
+      rr(g, 38, 92, 52, 9, 4, '#ffffff', false);
+    },
+  },
 ];
+
+/**
+ * Scatola di cartone bassa vista di tre quarti, con la freccia di download, gli occhi arrabbiati e la barra
+ * di avanzamento verde riempita per `fill` (0..1). Le strisce della barra scorrono con `i`.
+ * Niente verde acqua: è la tinta dei nemici in lista d'attesa (totem NGH).
+ */
+function updateBox(g: G, fill: number, i: number) {
+  poly(g, [96, 46, 118, 28, 118, 100, 96, 118], '#b0742f');
+  poly(g, [10, 46, 32, 28, 118, 28, 96, 46], '#ecbd7c');
+  poly(g, [48, 46, 70, 28, 82, 28, 60, 46], '#c98f4a', false);
+  rr(g, 10, 46, 86, 72, 3, '#d99a4e');
+  // freccia di download
+  rr(g, 68, 50, 12, 14, 2, INK, false);
+  poly(g, [60, 62, 88, 62, 74, 76], INK, false);
+  rr(g, 62, 78, 24, 4, 2, INK, false);
+  eyes(g, 24, 62, 22, 7, true);
+  // barra grossa (è il segno del nemico): binario scuro, parte piena verde con strisce oblique che scorrono
+  const x0 = 16;
+  const w = 74;
+  rr(g, x0, 87, w, 24, 5, '#1d2333', true, 2.5);
+  const fw = Math.max(8, (w - 6) * fill);
+  g.save();
+  g.beginPath();
+  g.roundRect(x0 + 3, 90, fw, 18, 3);
+  g.clip();
+  g.fillStyle = '#39d353';
+  g.fillRect(x0 + 3, 90, fw, 18);
+  g.fillStyle = '#9af5ac';
+  for (let s = -2; s < 10; s++) {
+    const sx = x0 + s * 14 + (i % 4) * 3.5;
+    g.beginPath();
+    g.moveTo(sx, 108);
+    g.lineTo(sx + 6, 108);
+    g.lineTo(sx + 15, 90);
+    g.lineTo(sx + 9, 90);
+    g.closePath();
+    g.fill();
+  }
+  g.restore();
+}
 
 /** Logo di Vim semplificato: rombo verde a due toni e V argentata con le grazie che escono dal rombo. */
 function vimLogo(g: G) {

@@ -6,7 +6,7 @@ Survivor-like 2.5D browser game (Three.js + TypeScript + Vite) themed on office 
 ## Commands
 
 ```bash
-npm run dev         # http://localhost:5173 (append #debug for test shortcuts: L level-up, B boss, G god mode, K kill all, T +1h, O +100€, N new weapon, V Vim passive, Y Call di Gruppo)
+npm run dev         # http://localhost:5173 (append #debug for test shortcuts: L level-up, B boss, G god mode, K kill all, T +1h, O +100€, N new weapon, V Vim passive, Y Call di Gruppo, U Aggiornamento)
 npm run typecheck   # tsc --noEmit — must pass before any task is reported done
 npm run build       # typecheck + production bundle in dist/
 node scripts/readme-media/capture.mjs <scene>   # deterministic screenshots/GIFs via Playwright (needs dev server running)

@@ -26,6 +26,16 @@ function icon(atlas: Atlas, id: string, px: number) {
   return i;
 }
 
+/** Glifo ⟳ sull'icona della carta: l'arma è in aggiornamento (la carta si sceglie lo stesso). */
+function updatingGlyph() {
+  const s = h('span', { class: 'upd', title: 'In aggiornamento' });
+  // freccia circolare in senso orario, disegnata qui: il carattere ⟳ manca in molti font dei telefoni
+  s.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11"/>' +
+    '<path d="M15 6.8A6 6 0 1 1 9 6.8"/><path d="M7.65 10.47L9 6.8L5.15 6.13"/></svg>';
+  return s;
+}
+
 function fmtTime(s: number) {
   const m = Math.floor(s / 60);
   return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -163,11 +173,12 @@ export class Screens {
     };
     req.cards.forEach((c, i) => {
       const prio = `var(--p${c.rarity})`;
+      const art = c.updating ? h('span', { class: 'art-upd' }, icon(this.atlas, c.icon, 52), updatingGlyph()) : icon(this.atlas, c.icon, 52);
       const t = h(
         'button',
         { class: 'ticket', type: 'button', id: `card-${i}` },
         h('header', {}, h('span', {}, `OB-${this.ticketSeq++} · ${c.tag}`), h('span', { class: 'prio' }, TUNING.rarity.names[c.rarity])),
-        h('div', { class: 'body' }, icon(this.atlas, c.icon, 52), h('b', {}, c.name), h('small', {}, c.level), h('ul', {}, ...c.lines.map((l) => h('li', {}, l)))),
+        h('div', { class: 'body' }, art, h('b', {}, c.name), h('small', {}, c.level), h('ul', {}, ...c.lines.map((l) => h('li', {}, l)))),
         h('kbd', {}, String(i + 1)),
       );
       t.style.setProperty('--prio', prio);

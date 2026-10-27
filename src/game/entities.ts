@@ -147,6 +147,8 @@ export interface Card {
   level: string;
   lines: string[];
   apply: () => void;
+  /** Upgrade di un'arma che era in aggiornamento quando è uscita la carta: l'icona porta il glifo ⟳. */
+  updating?: boolean;
 }
 
 export interface ChoiceRequest {

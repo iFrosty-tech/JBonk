@@ -191,7 +191,9 @@ export class App {
     }
     if (e.code === 'KeyV') this.debugVim(g);
     // una Call di Gruppo 8 unità davanti (rispetta il limite di call vive)
-    if (e.code === 'KeyY') g.spawnCall(g.player.x + g.rig.forward.x * 8, g.player.z + g.rig.forward.z * 8);
+    if (e.code === 'KeyY') g.spawnTimed('call', g.player.x + g.rig.forward.x * 8, g.player.z + g.rig.forward.z * 8);
+    // un Aggiornamento 8 unità davanti (anche oltre il limite di vivi: serve per provarne due di fila)
+    if (e.code === 'KeyU') g.spawnTimed('update', g.player.x + g.rig.forward.x * 8, g.player.z + g.rig.forward.z * 8, true);
     if (e.code === 'KeyC') g.spawnPickup('card', 15, g.player.x + g.rig.forward.x * 4, g.player.z + g.rig.forward.z * 4);
     if (e.code === 'KeyF') g.startWave(g.player.x, g.player.z);
     if (e.code === 'KeyJ') {

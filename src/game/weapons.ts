@@ -78,11 +78,15 @@ export interface Bee {
 
 const LOB_GRAVITY = 30;
 const HIVE_WIDTH = 2.1; // larghezza dell'alveare in unità mondo
+/** Kind con oggetti propri già partiti (fulmini, tazze e pozze, dischi, api): in aggiornamento finiscono la corsa senza fare danno. */
+const IN_FLIGHT_KINDS = new Set(['strike', 'lob', 'boomerang', 'swarm']);
 
 export class WeaponInstance {
   level = 1;
   stats: WeaponStats;
   timer = 0.4;
+  /** Secondi rimasti "in aggiornamento" (0 = attiva): niente nuovi attacchi né danni, oggetti persistenti spenti. */
+  locked = 0;
   angle = 0;
   damageDealt = 0;
   readonly hitTimes = new Map<number, number>();
@@ -183,6 +187,12 @@ export function updateWeapon(w: WeaponInstance, g: Game, dt: number) {
   const cd = st.cooldown / s.attackSpeed;
   const area = st.area * s.area;
   const p = g.player;
+  // in aggiornamento: nessun nuovo attacco; orbite, aura e aiutanti si spengono (i danni li blocca damageEnemy)
+  const locked = w.locked > 0;
+  if (locked && !IN_FLIGHT_KINDS.has(w.def.kind)) {
+    w.points.length = 0;
+    return;
+  }
 
   switch (w.def.kind) {
     case 'projectile': {
@@ -277,7 +287,7 @@ export function updateWeapon(w: WeaponInstance, g: Game, dt: number) {
     }
     case 'strike': {
       w.timer -= dt;
-      if (w.timer <= 0) {
+      if (w.timer <= 0 && !locked) {
         const n = st.count + s.projectiles;
         const targets = g.randomEnemies(p.x, p.z, st.range, n);
         if (targets.length) {
@@ -400,7 +410,7 @@ export function updateWeapon(w: WeaponInstance, g: Game, dt: number) {
     }
     case 'lob': {
       w.timer -= dt;
-      if (w.timer <= 0) {
+      if (w.timer <= 0 && !locked) {
         const n = st.count + s.projectiles;
         const near = g.nearestEnemies(p.x, p.z, st.range, n * 3);
         if (!near.length) w.timer = 0.2;
@@ -458,7 +468,7 @@ export function updateWeapon(w: WeaponInstance, g: Game, dt: number) {
       const v0 = st.speed * s.projSpeed;
       const R = st.range;
       w.timer -= dt;
-      if (w.timer <= 0) {
+      if (w.timer <= 0 && !locked) {
         const t = g.nearestEnemies(p.x, p.z, R * 1.2, 1)[0];
         if (!t) w.timer = 0.2;
         else {
@@ -562,7 +572,7 @@ export function updateWeapon(w: WeaponInstance, g: Game, dt: number) {
       H.z += (hz - H.z) * k;
       for (let i = 0; i < N; i++) if (w.cells[i] >= 0 && w.cells[i] < 1) w.cells[i] = Math.min(1, w.cells[i] + dt / Math.max(0.1, st.duration));
       w.timer -= dt;
-      if (w.timer <= 0) {
+      if (w.timer <= 0 && !locked) {
         const ready: number[] = [];
         for (let i = 0; i < N; i++) if (w.cells[i] === 1) ready.push(i);
         const n = Math.min(ready.length, st.count + s.projectiles);
@@ -642,6 +652,8 @@ function loop(frames: Frame[], t: number, fps: number) {
 export function drawWeapon(w: WeaponInstance, g: Game) {
   const st = w.stats;
   const area = st.area * g.stats.area;
+  // in aggiornamento orbite, aura e aiutanti sono spenti; dell'alveare restano solo le api già in volo
+  if (w.locked > 0 && !IN_FLIGHT_KINDS.has(w.def.kind)) return;
   switch (w.def.kind) {
     case 'orbit': {
       const frames = g.anim(w.def.sprite);
@@ -714,14 +726,14 @@ export function drawWeapon(w: WeaponInstance, g: Game) {
       if (!hive || !w.hive.ready) break;
       const h = hive.cellPx * (HIVE_WIDTH / hive.size);
       w.cells.forEach((v, i) => {
-        if (v < 0) return; // in volo
+        if (v < 0 || w.locked > 0) return; // in volo, o alveare spento
         const sc = v >= 1 ? 1 : Math.max(0, easeOutBack(v));
         if (sc < 0.03) return;
         const pos = cellPos(w, g, hive, i);
         const bob = Math.sin(g.runTime * 2.6 + i * 1.3) * 0.06;
         g.solid.push(g.frame(`${w.def.sprite}_c${i}`), pos.x, pos.y + bob - (h * sc) / 2, pos.z, h * sc, 1, v < 1 ? (1 - v) * 0.7 : 0);
       });
-      g.shadows.push(w.hive.x, g.world.height(w.hive.x, w.hive.z), w.hive.z, 0.9);
+      if (w.locked <= 0) g.shadows.push(w.hive.x, g.world.height(w.hive.x, w.hive.z), w.hive.z, 0.9);
       const fly = g.anim(`${w.def.sprite}_fly`);
       const size = 0.8;
       for (const b of w.bees) {

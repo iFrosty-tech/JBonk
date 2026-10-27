@@ -16,6 +16,13 @@ const list: EnemyDef[] = [
     id: 'call', name: 'Call di Gruppo', sprite: 'en_call', hp: 80, speed: 3.4, damage: 5, radius: 0.6, height: 2, xp: 3, gold: 0.2, hover: 1.2,
     aura: { radius: 6, reduction: 0.3, delay: 1 },
   },
+  // Debuff: compare a tempo (TUNING.timed); al contatto si consuma e mette in aggiornamento un'arma
+  {
+    id: 'update', name: 'Aggiornamento', sprite: 'en_update', hp: 40, speed: 3.2, damage: 4, radius: 0.65, height: 1.5, xp: 3, gold: 0.2,
+    fps: 0.8, // la barra di download (8 fotogrammi) si riempie in 10 s, il preavviso, poi riparte
+    badge: { sprite: 'update_badge', y: 2.4, size: 0.85 }, // segnale sopra le teste dell'orda (da 2,4 a 3,25 da terra)
+    onTouch: { lockWeapon: true, consume: true, fx: 'update_flash' },
+  },
 
   // Élite ("guardiani"): lasciano un forziere gratis
   { id: 'scope', name: 'Scope Creep', sprite: 'en_scope', hp: 650, speed: 3.6, damage: 22, radius: 1.8, height: 4.6, xp: 40, gold: 1, kind: 'elite' },

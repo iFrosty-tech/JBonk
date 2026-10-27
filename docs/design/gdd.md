@@ -342,6 +342,8 @@ Voce in `src/config/enemies.ts`:
 
 ```ts
 { id: 'update', name: 'Aggiornamento', sprite: 'en_update', hp: 40, speed: 3.2, damage: 4, radius: 0.65, height: 1.5, xp: 3, gold: 0.2,
+  fps: 0.8, // fase 2: la barra di download si riempie in 10 s, quanto il preavviso
+  badge: { sprite: 'update_badge', y: 2.4, size: 0.85 }, // fase 2, decisione del lead: in mezzo all'orda la scatola alta 1,5 è coperta; il segnale sta sopra le teste e la scatola resta scavalcabile
   onTouch: { lockWeapon: true, consume: true } }
 ```
 

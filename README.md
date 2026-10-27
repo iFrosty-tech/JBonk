@@ -76,7 +76,7 @@ su iPhone si ottiene aggiungendo la pagina alla schermata Home.
   <img src="docs/media/mobile.png" alt="JBonk su telefono in orizzontale, al tramonto tra la piscina e i campi in terra rossa: joystick sotto il pollice sinistro, pulsanti Salta e Scatto a destra, HUD compatto" width="640">
 </p>
 
-Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti, `T` +1 ora, `O` +100 €, `N` nuova arma (prima le ultime aggiunte), `C` carta Soldo, `F` onda del radar NGH, `J` statuetta JOscar, `V` passivo Scorciatoie di Vim (un livello a ogni pressione), `Y` una Call di Gruppo davanti al giocatore.
+Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti, `T` +1 ora, `O` +100 €, `N` nuova arma (prima le ultime aggiunte), `C` carta Soldo, `F` onda del radar NGH, `J` statuetta JOscar, `V` passivo Scorciatoie di Vim (un livello a ogni pressione), `Y` una Call di Gruppo davanti al giocatore, `U` un Aggiornamento davanti al giocatore.
 
 ## Il loop di gioco
 
