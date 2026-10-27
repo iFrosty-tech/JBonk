@@ -598,6 +598,8 @@ const sprites: SpriteDef[] = [
   { id: 'ic_board', cw: 1, ch: 1, draw: (g) => emoji(g, '📈', 64, 68, 92) },
   { id: 'ic_review', cw: 1, ch: 1, draw: (g) => emoji(g, '🔍', 64, 68, 92) },
   { id: 'ic_multi', cw: 1, ch: 1, draw: (g) => emoji(g, '🗂️', 64, 68, 92) },
+  // Scorciatoie di Vim: il rombo verde con la V, che deve leggersi anche a 28 px
+  { id: 'ic_vim', cw: 1, ch: 1, draw: (g) => vimLogo(g) },
 
   // Raccoglibili
   { id: 'xp1', cw: 1, ch: 1, draw: (g) => gem(g, '#4c86ff') },
@@ -685,6 +687,19 @@ const sprites: SpriteDef[] = [
   },
 ];
 
+/** Logo di Vim semplificato: rombo verde a due toni e V argentata con le grazie che escono dal rombo. */
+function vimLogo(g: G) {
+  poly(g, [64, 6, 122, 64, 64, 122, 6, 64], '#0b6b2b', true, 4);
+  poly(g, [64, 18, 110, 64, 64, 110, 18, 64], '#2aa84a', false);
+  // faccetta in alto a sinistra più chiara: dà il volume della gemma
+  poly(g, [64, 18, 18, 64, 41, 64, 64, 41], '#4cc96a', false);
+  // la V: braccio sinistro spesso, destro sottile, come nel logo
+  const v = [24, 28, 60, 28, 60, 42, 54, 42, 68, 76, 84, 42, 78, 42, 78, 28, 106, 28, 106, 42, 100, 42, 74, 102, 60, 102, 32, 42, 24, 42];
+  poly(g, v, '#dfe3ea', false);
+  // ombra lungo il bordo esterno del braccio destro, poi il contorno sopra a tutto
+  poly(g, [93, 42, 100, 42, 74, 102, 69, 97], '#9aa3b2', false);
+  line(g, [...v, v[0], v[1]], INK, 4.5);
+}
 function gem(g: G, color: string) {
   poly(g, [64, 14, 104, 54, 64, 116, 24, 54], color, true, 4);
   poly(g, [64, 14, 84, 54, 64, 116, 44, 54], 'rgba(255,255,255,0.35)', false);

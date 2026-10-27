@@ -11,6 +11,7 @@ export const TUNING = {
   dashSpeed: 24,
   dashTime: 0.18,
   dashCooldown: 1.4,
+  stillDelay: 0.4, // secondi senza input di movimento per entrare in INSERT (Scorciatoie di Vim)
   hurtInvuln: 0.45,
   pickupRadius: 4.5,
   maxWeapons: 4,

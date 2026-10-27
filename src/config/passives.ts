@@ -13,6 +13,15 @@ const list: PassiveDef[] = [
   { id: 'lavagna', name: 'Lavagna Bianca', description: 'Area degli attacchi', icon: 'ic_board', stat: 'area', amount: 0.12, fmt: 'pct', maxLevel: 5 },
   { id: 'review', name: 'Code Review', description: 'Probabilità di critico', icon: 'ic_review', stat: 'critChance', amount: 0.05, fmt: 'pct', maxLevel: 5 },
   { id: 'multitask', name: 'Multitasking', description: 'Proiettili extra', icon: 'ic_multi', stat: 'projectiles', amount: 1, fmt: 'int', maxLevel: 3 },
+  // fermo = INSERT (velocità d'attacco), in movimento = NORMAL (velocità); la carta mostra le due righe di `modes`
+  {
+    id: 'vim', name: 'Scorciatoie di Vim', description: 'Per uscire: :q! (in teoria)', icon: 'ic_vim',
+    stat: 'attackSpeed', amount: 0.12, fmt: 'pct', maxLevel: 5,
+    modes: {
+      still: { stat: 'attackSpeed', amount: 0.12, line: 'Fermo: {v} Velocità d\'attacco' },
+      moving: { stat: 'moveSpeed', amount: 0.05, line: 'In movimento: {v} Velocità' },
+    },
+  },
 ];
 
 export const PASSIVES: Record<string, PassiveDef> = Object.fromEntries(list.map((p) => [p.id, p]));

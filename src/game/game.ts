@@ -84,6 +84,10 @@ export class Game {
   weapons: WeaponInstance[] = [];
   passives: { id: string; level: number; value: number }[] = [];
   private buffs: Partial<Record<StatKey, number>> = {};
+  /** Scorciatoie di Vim: true in INSERT (hai il passivo e nessun input di movimento da `TUNING.stillDelay` s). Lo legge l'HUD. */
+  insertMode = false;
+  private stillT = 0; // secondi senza input di movimento né scatto
+  private hasModes = false; // c'è almeno un passivo a due modalità
 
   enemies: Enemy[] = [];
   projectiles: Projectile[] = [];
@@ -238,7 +242,18 @@ export class Game {
       s[k] += v;
     };
     for (const [k, v] of Object.entries(this.character.bonus)) add(k as StatKey, v as number);
-    for (const p of this.passives) add(PASSIVES[p.id].stat, p.value);
+    this.hasModes = false;
+    for (const p of this.passives) {
+      const def = PASSIVES[p.id];
+      if (!def.modes) {
+        add(def.stat, p.value);
+        continue;
+      }
+      // passivo a due modalità: vale solo l'effetto della modalità attiva, scalato come il valore accumulato
+      this.hasModes = true;
+      const m = this.insertMode ? def.modes.still : def.modes.moving;
+      add(m.stat, (m.amount * p.value) / def.amount);
+    }
     for (const [k, v] of Object.entries(this.buffs)) add(k as StatKey, v as number);
     const prevMax = this.stats.maxHp;
     this.stats = s;
@@ -656,6 +671,7 @@ export class Game {
       p.dashZ = p.moving ? dz : f.z;
       this.spawnFx('puff', p.x, p.y, p.z, { size0: 1, size1: 2, life: 0.3, alpha: 0.6 });
     }
+    this.updateInsertMode(dt);
     let speed = TUNING.playerSpeed * this.stats.moveSpeed * Math.min(1, len);
     if (p.dashT > 0) {
       p.dashT -= dt;
@@ -696,6 +712,21 @@ export class Game {
     c.x += (tx - c.x) * k;
     c.z += (tz - c.z) * k;
     c.y += (Math.max(p.y, this.world.height(c.x, c.z)) + 1.3 + Math.sin(this.runTime * 3) * 0.2 - c.y) * k;
+  }
+
+  /**
+   * Scorciatoie di Vim: INSERT dopo `TUNING.stillDelay` s senza input di movimento, NORMAL appena c'è input o scatto.
+   * Conta l'input (tastiera o joystick oltre la zona morta), non lo spostamento: spinte e salto non cambiano modalità.
+   * Le statistiche si ricalcolano solo al cambio di modalità, nello stesso frame (prima del movimento e delle armi).
+   */
+  private updateInsertMode(dt: number) {
+    const p = this.player;
+    this.stillT = p.moving || p.dashT > 0 ? 0 : this.stillT + dt;
+    const insert = this.hasModes && this.stillT >= TUNING.stillDelay;
+    if (insert === this.insertMode) return;
+    this.insertMode = insert;
+    this.recomputeStats();
+    if (insert) this.audio.play('keypress'); // il "tic" del tasto i (al massimo uno al secondo, lo limita audio.ts)
   }
 
   private updateDirector(dt: number) {

@@ -268,6 +268,9 @@ button:focus-visible,
   border: 2px solid var(--ink-3);
   display: grid;
   place-items: center;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 .slot.empty {
   border-style: dashed;
@@ -288,6 +291,45 @@ button:focus-visible,
   color: var(--ink);
   padding: 0 4px;
   border-radius: 3px;
+}
+/* Scorciatoie di Vim in INSERT: lo slot si accende (bordo più chiaro e alone, non solo colore) */
+.slot.lit {
+  border-color: var(--ok);
+  background: rgba(13, 52, 30, 0.85);
+  box-shadow:
+    0 0 0 2px rgba(57, 178, 106, 0.4),
+    0 0 12px rgba(57, 178, 106, 0.6);
+}
+/* la riga di stato di Vim: compare solo in INSERT, appoggiata sopra gli slot (li segue in ogni layout) */
+.vim-insert {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--paper);
+  background: rgba(16, 19, 28, 0.75);
+  padding: 3px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  translate: 0 4px;
+  transition:
+    opacity 0.15s,
+    translate 0.15s,
+    visibility 0s 0.15s;
+}
+.vim-insert.on {
+  opacity: 1;
+  visibility: visible;
+  translate: 0 0;
+  transition:
+    opacity 0.15s,
+    translate 0.15s;
 }
 
 .prompt {
@@ -1019,7 +1061,18 @@ button:focus-visible,
 #app.touch .slot > i {
   scale: 0.7;
 }
+/* col touch -- INSERT -- sta al centro, sopra la riga degli slot */
+#app.touch .vim-insert {
+  left: 50%;
+  bottom: calc(100% + 6px);
+  translate: -50% 4px;
+}
+#app.touch .vim-insert.on {
+  translate: -50% 0;
+}
 #app.touch .prompt {
+  /* sempre sopra la scritta -- INSERT -- (slot 32 px col bordo + 6 + 20 + 8 di respiro), anche con la barra di sistema */
+  bottom: max(18%, calc(max(10px, env(safe-area-inset-bottom, 0px)) + 66px));
   width: max-content;
   max-width: 86vw;
   white-space: normal;
@@ -1036,8 +1089,9 @@ button:focus-visible,
   #app.touch .slots {
     bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 196px);
   }
+  /* +16 px rispetto a prima: tra slot e prompt ci sta la scritta -- INSERT -- */
   #app.touch .prompt {
-    bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 244px);
+    bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 260px);
   }
   #app.touch .hint {
     bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 300px);
@@ -1055,5 +1109,14 @@ button:focus-visible,
   .pick,
   .btn {
     transition: none;
+  }
+  /* la scritta INSERT resta una dissolvenza breve, senza spostarsi */
+  .vim-insert,
+  .vim-insert.on {
+    translate: none;
+  }
+  #app.touch .vim-insert,
+  #app.touch .vim-insert.on {
+    translate: -50% 0;
   }
 }
