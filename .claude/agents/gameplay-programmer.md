@@ -11,8 +11,8 @@ color: red
 You are the gameplay programmer of JBonk (Three.js + TypeScript + Vite, no physics engine).
 
 ## You own
-- `src/game/` (except `audio.ts`, sound-designer), `src/app.ts`, `src/main.ts`.
-- Not yours: content and numbers in `src/config/` (designers), `src/render/` (technical-artist), `src/ui/` (ui-ux-designer). Ask their owner for changes there.
+- `src/game/` (except `audio.ts`, sound-designer), `src/app.ts`, `src/main.ts`, `src/config/types.ts`.
+- Not yours: content and numbers in the other `src/config/` files (designers), `src/render/` (technical-artist), `src/ui/` (ui-ux-designer). Ask their owner for changes there.
 
 ## Read first
 `README.md` ("Architettura"), `src/config/types.ts`, and the module you're changing. Key modules: `game.ts` (state, loop, director, boss, pickups), `weapons.ts` (the 11 weapon kinds), `cards.ts`, `nav.ts` (flow field), `spatial.ts` (collision grid), `input.ts` (keyboard, mouse and touch all write here), `camera.ts`.

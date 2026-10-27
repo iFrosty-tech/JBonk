@@ -31,7 +31,7 @@ Role definitions live in `.claude/agents/`. Spawn teammates by agent type, e.g.
 | `game-designer` | `docs/design/gdd.md`, `src/config/{characters,weapons,passives,enemies}.ts` | mechanics, new weapons/enemies/bosses/characters, specs |
 | `balance-designer` | `src/config/tuning.ts`, `docs/design/balance.md` | difficulty curve, DPS/HP math, spawn rates, rarity, XP |
 | `level-designer` | `src/config/biomes.ts`, `src/maps/`, `scripts/map/`, `docs/design/levels.md` | projects/biomes, POIs, map layout, spawn placement, pacing per area |
-| `gameplay-programmer` | `src/game/` (except `audio.ts`), `src/app.ts`, `src/main.ts` | game loop, weapon behaviors, AI, collisions, input, camera |
+| `gameplay-programmer` | `src/game/` (except `audio.ts`), `src/app.ts`, `src/main.ts`, `src/config/types.ts` | game loop, weapon behaviors, AI, collisions, input, camera |
 | `technical-artist` | `src/render/`, `src/assets/` | sprites, animated logos, city/facades, props, lighting, draw-call perf |
 | `ui-ux-designer` | `src/ui/` | HUD, screens, cards UI, touch controls, mobile layout, readability |
 | `sound-designer` | `src/game/audio.ts` | synthesized SFX, music, mix, audio feedback |
