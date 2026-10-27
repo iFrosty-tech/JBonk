@@ -31,8 +31,12 @@ const out = (f) => join(OUT, f);
 // personaggi e progetti (indici in config/characters.ts e config/biomes.ts)
 const DEV = 0, PM = 1, SYS = 2;
 const PHOENIX = 0, ATLAS = 1, HELIOS = 2;
-// zona aperta sui campi sportivi accanto alla sede JPanik
-const FIELDS = { x: -45, z: 155 };
+// piazzale dell'Enjoy Sporting Club, tra i campi in terra rossa, la piscina e la cupola bianca
+const CLUB = { x: -28, z: 175 };
+// un campo da tennis in terra rossa dello Sporting Club
+const COURT = { x: -45, z: 155 };
+// prato aperto tra le palazzine a nord dello Sporting Club
+const MEADOW = { x: -54, z: 121 };
 
 /** HUD credibile: livello, budget e ticket chiusi da metà giornata. */
 async function hudState(page, { level = 12, gold = 87, kills = 1342, time = 200 } = {}) {
@@ -121,14 +125,16 @@ const scenes = {
       context: { isMobile: true, hasTouch: true },
     });
     await startRun(page, SYS, HELIOS);
-    await loadout(page, [['firewall', 4], ['java', 3, { count: 2 }], ['spring', 3]]);
-    await teleport(page, FIELDS.x, FIELDS.z, 2.4);
+    // armi a distanza: col firewall i numeri del danno coprirebbero il giocatore
+    await loadout(page, [['angular', 4, { count: 3 }], ['java', 3, { count: 2 }], ['spring', 3]]);
+    await teleport(page, CLUB.x, CLUB.z, 2.4);
     await hudState(page, { level: 9, gold: 58, kills: 731, time: 170 });
     await page.evaluate(() => (window.jbonk.input.locked = false));
     await camera(page, { pitch: 0.42, dist: 13 });
     await settle(page);
-    await spawnRing(page, ['cr', 'auditor', 'ticket'], 45, 10, 24);
-    await step(page, 25);
+    await page.evaluate(() => (window.jbonk.game.enemies = [])); // via quelli già addosso al giocatore
+    await spawnRing(page, ['cr', 'auditor', 'ticket'], 40, 9, 24);
+    await step(page, 6); // i nemici stanno arrivando: dopo qualche secondo coprirebbero il giocatore
     // il joystick a schermo appare dove si appoggia il pollice: lo simula un tocco tenuto premuto
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 120, y: 290 }] });
@@ -164,7 +170,7 @@ const scenes = {
       ['angular', 5, { count: 4, damage: 40 }],
       ['jpanik', 4, { damage: 60 }],
     ]);
-    await teleport(page, FIELDS.x, FIELDS.z, 0.6);
+    await teleport(page, CLUB.x, CLUB.z, 2.4);
     await hudState(page);
     await camera(page, { pitch: 0.44, dist: 13 });
     await settle(page);
@@ -190,7 +196,7 @@ const scenes = {
   async levelup(page) {
     await startRun(page, PM, HELIOS);
     await loadout(page, [['slides', 4, { count: 4 }], ['java', 3], ['spring', 2]]);
-    await teleport(page, FIELDS.x, FIELDS.z, 2.2);
+    await teleport(page, CLUB.x, CLUB.z, 0.6);
     await hudState(page, { level: 7, gold: 41, kills: 512, time: 130 });
     await camera(page, { pitch: 0.42, dist: 13 });
     await settle(page);
@@ -245,7 +251,7 @@ const scenes = {
       ['java', 4, { count: 2 }],
       ['claude', 4, { count: 3 }],
     ]);
-    await teleport(page, FIELDS.x - 10, FIELDS.z + 12, 0.9);
+    await teleport(page, MEADOW.x, MEADOW.z, 0.6);
     await hudState(page, { level: 21, gold: 140, kills: 2410, time: 300 });
     await camera(page, { pitch: 0.36, dist: 15 });
     await settle(page);
@@ -284,7 +290,7 @@ const scenes = {
     for (const [id, extra] of list) {
       await startRun(page, DEV, PHOENIX);
       await loadout(page, [[id, 5, { ...extra, damage: 400 }]]);
-      await teleport(page, FIELDS.x, FIELDS.z, 0.6);
+      await teleport(page, COURT.x, COURT.z, 0.6);
       await hudState(page, { level: 9, time: 0 }); // a inizio giornata lo spawn automatico è al minimo
       await camera(page, { pitch: 0.55, dist: 9 });
       await settle(page, 60);
@@ -341,7 +347,7 @@ const scenes = {
   async joscar(page) {
     await startRun(page, PM, ATLAS);
     await loadout(page, [['slides', 3]]);
-    await teleport(page, FIELDS.x, FIELDS.z, 0.6);
+    await teleport(page, CLUB.x, CLUB.z, 2.4);
     await hudState(page, { level: 18, gold: 96, time: 300 });
     await camera(page, { pitch: 0.25, dist: 9 });
     await settle(page);
@@ -380,7 +386,7 @@ const scenes = {
       ['angular', 6],
       ['jpanik', 5],
     ]);
-    await teleport(page, FIELDS.x, FIELDS.z, 0.6);
+    await teleport(page, CLUB.x, CLUB.z, 2.4);
     await settle(page, 30);
     await page.evaluate(() => {
       const g = window.jbonk.game;
@@ -394,7 +400,7 @@ const scenes = {
     await page.screenshot({ path: out('victory.png') });
   },
 
-  // vista dall'alto del quartiere, con il giocatore davanti alla sede
+  // vista dall'alto del quartiere intorno alla sede
   async aerial(page) {
     for (const [biome, file] of [
       [HELIOS, 'aerial-helios.png'],
@@ -411,13 +417,17 @@ const scenes = {
         if (g.scene.fog) g.scene.fog.density *= 0.35;
         g.camera.far = 900;
         g.camera.updateProjectionMatrix();
+        // niente "buco" tra camera e giocatore: dall'alto nasconderebbe gli alberi intorno alla sede
+        const before = g.world.beforeRender.bind(g.world);
+        g.world.beforeRender = (cam) => before(cam, cam.position.clone().setY(cam.position.y + 0.01));
         const rig = g.rig;
         const orig = rig.update.bind(rig);
         rig.update = (...a) => {
           orig(...a);
           const p = g.player;
-          g.camera.position.set(p.x + 75, 105, p.z + 45);
-          g.camera.lookAt(p.x - 15, 0, p.z - 15);
+          // dal lato della Colombo: in primo piano lo Sporting Club, poi la sede JPanik e il quartiere
+          g.camera.position.set(p.x + 40, 90, p.z + 130);
+          g.camera.lookAt(p.x + 10, 0, p.z - 30);
         };
       });
       await step(page, 6);
