@@ -153,6 +153,7 @@ export class App {
       () => this.startRun(this.selection),
       () => this.showTitle(),
       this.audio,
+      { ram: g.ram, cpu: g.cpu }, // barre del loadout in pausa (le mostra solo col budget)
     );
   }
 
@@ -190,6 +191,12 @@ export class App {
       }
     }
     if (e.code === 'KeyV') this.debugVim(g);
+    // loadout budget: +1 RAM e +1 CPU (non conta per il limite dei premi del JOscar)
+    if (e.code === 'KeyR' && TUNING.loadout === 'budget') {
+      g.addBudget('ram', 1);
+      g.addBudget('cpu', 1);
+      this.hud?.banner(`RAM ${g.ram.max} · CPU ${g.cpu.max}`, 'info');
+    }
     // una Call di Gruppo 8 unità davanti (rispetta il limite di call vive)
     if (e.code === 'KeyY') g.spawnTimed('call', g.player.x + g.rig.forward.x * 8, g.player.z + g.rig.forward.z * 8);
     // un Aggiornamento 8 unità davanti (anche oltre il limite di vivi: serve per provarne due di fila)
@@ -207,8 +214,9 @@ export class App {
   private debugVim(g: Game) {
     const def = PASSIVES.vim;
     const owned = g.passives.find((p) => p.id === def.id);
+    const block = owned ? null : g.installBlock('cpu', def.id);
     if (owned && owned.level >= def.maxLevel) this.hud?.banner(`${def.name}: livello massimo`, 'info');
-    else if (!owned && g.passives.length >= TUNING.maxPassives) this.hud?.banner('Slot dei passivi pieni', 'warn');
+    else if (block) this.hud?.banner(block === 'cpu' ? 'CPU insufficiente' : 'Slot dei passivi pieni', 'warn');
     else {
       g.addPassive(def.id, def.amount);
       this.hud?.banner(`Passivo di test: ${def.name} Lv ${owned ? owned.level : 1}`, 'info');

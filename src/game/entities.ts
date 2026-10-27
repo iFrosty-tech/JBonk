@@ -149,6 +149,27 @@ export interface Card {
   apply: () => void;
   /** Upgrade di un'arma che era in aggiornamento quando è uscita la carta: l'icona porta il glifo ⟳. */
   updating?: boolean;
+  /** Loadout budget, solo su arma o passivo nuovo: "RAM 3 → 6/9" = res, amount, after/max. */
+  cost?: { res: Resource; amount: number; after: number; max: number };
+  /** Loadout budget, solo sul premio del JOscar che allarga una risorsa: "RAM 9 → 10". */
+  bonus?: { res: Resource; from: number; to: number };
+}
+
+/** Risorse del loadout budget: RAM per le armi, CPU per i passivi. */
+export type Resource = 'ram' | 'cpu';
+
+/** Una risorsa del loadout budget: quanta ne occupano gli oggetti installati e quanta ce n'è. */
+export interface Budget {
+  used: number;
+  max: number;
+}
+
+/** Barre e riga "insufficiente" nella finestra delle carte (solo con il loadout budget). */
+export interface ChoiceBudget {
+  ram: Budget;
+  cpu: Budget;
+  /** Risorse per cui il filtro ha escluso almeno un'arma o un passivo nuovo, RAM prima di CPU (vuoto = nessuna riga). */
+  short: Resource[];
 }
 
 export interface ChoiceRequest {
@@ -157,4 +178,6 @@ export interface ChoiceRequest {
   cards: Card[];
   skipLabel: string | null;
   onSkip?: () => void;
+  /** Solo con il loadout budget e solo per le carte di upgradeCards (level-up, forzieri, JOscar). */
+  budget?: ChoiceBudget;
 }

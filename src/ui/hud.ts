@@ -170,7 +170,9 @@ export class Hud {
     // col touch il suggerimento sta nella stessa fascia di -- INSERT --: in INSERT cede il posto
     this.hint.hidden = g.mode !== 'play' || (touch ? g.runTime > 10 || !!g.prompt || g.insertMode : g.input.locked);
 
-    const slotKey = g.weapons.map((w) => w.def.id + w.level).join() + '|' + g.passives.map((x) => x.id + x.level).join();
+    let slotKey = g.weapons.map((w) => w.def.id + w.level).join() + '|' + g.passives.map((x) => x.id + x.level).join();
+    // loadout a budget: su desktop le righe dipendono anche dai totali (premi del JOscar) e da touch/mouse
+    if (TUNING.loadout === 'budget') slotKey += `|${touch}|${g.ram.max}|${g.cpu.max}`;
     this.set('slots', slotKey, () => this.renderSlots(g));
     // in NORMAL nessuna scritta, senza Vim mai (insertMode resta false)
     this.set('insert', String(g.insertMode), () => {
@@ -213,17 +215,27 @@ export class Hud {
 
   private renderSlots(g: Game) {
     this.slots.replaceChildren(this.insert);
+    const budget = TUNING.loadout === 'budget';
+    // loadout a budget su desktop: "Gestione attività", blocchi larghi in proporzione al costo
+    const blocks = budget && !g.input.touch;
+    this.slots.classList.toggle('budget', blocks);
+    // col touch, oltre 8 oggetti (possibile solo col loadout a budget) la riga diventa compatta
+    this.slots.classList.toggle('dense', g.weapons.length + g.passives.length > 8);
     this.vimSlot = null;
     // slot nuovi: lo stato di Vim e degli aggiornamenti va riapplicato al prossimo controllo
     for (const k of [...this.cache.keys()]) if (k === 'insert' || k.startsWith('lock')) this.cache.delete(k);
-    const mk = (icons: { id: string; icon: string; level: number; title: string }[], max: number) => {
+    type Item = { id: string; icon: string; level: number; title: string; cost: number };
+    // `max` = slot totali (gli avanzi sono tratteggiati); col budget su desktop `b` dà etichetta, parte libera e "usata/totale"
+    const mk = (items: Item[], max: number, b?: { label: string; used: number; max: number }) => {
       const row = el('div', 'row', this.slots);
+      if (b) el('b', 'res', row).textContent = b.label;
       const filled: HTMLElement[] = [];
       for (let i = 0; i < max; i++) {
-        const it = icons[i];
+        const it = items[i];
         const s = el('div', it ? 'slot' : 'slot empty', row);
         if (!it) continue;
         filled.push(s);
+        if (b) s.style.setProperty('--u', String(it.cost));
         if (it.id === 'vim') this.vimSlot = s;
         s.title = it.title;
         const ic = el('i', '', s);
@@ -231,10 +243,17 @@ export class Hud {
         const lv = el('em', '', s);
         lv.textContent = String(it.level);
       }
+      if (b) {
+        if (b.max > b.used) el('div', 'slot empty', row).style.setProperty('--u', String(b.max - b.used));
+        el('span', 'use', row).textContent = `${b.used}/${b.max}`;
+      }
       return filled;
     };
-    this.weaponSlots = mk(g.weapons.map((w) => ({ id: '', icon: w.def.icon, level: w.level, title: w.def.name })), TUNING.maxWeapons);
-    mk(g.passives.map((p) => ({ id: p.id, icon: PASSIVES[p.id].icon, level: p.level, title: PASSIVES[p.id].name })), TUNING.maxPassives);
+    const weapons = g.weapons.map((w) => ({ id: w.def.id, icon: w.def.icon, level: w.level, title: w.def.name, cost: w.def.cost }));
+    const passives = g.passives.map((p) => ({ id: p.id, icon: PASSIVES[p.id].icon, level: p.level, title: PASSIVES[p.id].name, cost: PASSIVES[p.id].cost }));
+    // col budget e touch: solo le icone installate, a dimensione fissa (niente slot vuoti: il numero non è fisso)
+    this.weaponSlots = mk(weapons, budget ? weapons.length : TUNING.maxWeapons, blocks ? { label: 'RAM', ...g.ram } : undefined);
+    mk(passives, budget ? passives.length : TUNING.maxPassives, blocks ? { label: 'CPU', ...g.cpu } : undefined);
   }
 
   private drawNumbers(g: Game) {

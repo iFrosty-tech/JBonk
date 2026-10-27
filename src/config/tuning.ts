@@ -14,8 +14,18 @@ export const TUNING = {
   stillDelay: 0.4, // secondi senza input di movimento per entrare in INSERT (Scorciatoie di Vim)
   hurtInvuln: 0.45,
   pickupRadius: 4.5,
-  maxWeapons: 4,
-  maxPassives: 4,
+  // Loadout: 'slots' = 4 armi + 4 passivi (com'era); 'budget' = «PC aziendale», armi in RAM e passivi in CPU
+  // (costi in weapons.ts e passives.ts, budget di partenza in characters.ts)
+  loadout: 'budget' as 'slots' | 'budget',
+  maxWeapons: 4, // solo con 'slots'
+  maxPassives: 4, // solo con 'slots'
+  budget: {
+    maxWeapons: 6, // tetti di sicurezza: la riga di icone del telefono regge al massimo 10 oggetti
+    maxPassives: 6,
+    maxItems: 10,
+    prize: 1, // RAM o CPU in più col premio del JOscar
+    prizeMax: 2, // premi del JOscar sul budget presi al massimo in una partita
+  },
   spawnDistance: [30, 42] as const,
   baseSpawnRate: 0.9, // nemici al secondo a inizio giornata
   spawnRateGrowth: 0.014, // +nemici/s per ogni secondo

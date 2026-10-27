@@ -2,11 +2,11 @@ import { BUFFS, PASSIVES, PASSIVE_IDS } from '../config/passives';
 import { TUNING } from '../config/tuning';
 import { WEAPONS, WEAPON_IDS } from '../config/weapons';
 import type { StatFormat, UpgradeDef } from '../config/types';
-import type { Card } from './entities';
+import type { Card, ChoiceBudget, Resource } from './entities';
 import type { Game } from './game';
 import { WeaponInstance } from './weapons';
 
-// Generazione delle carte (level-up, forziere, macchinetta del caffè).
+// Generazione delle carte (level-up, forziere, JOscar, macchinetta del caffè).
 // La rarità è la "priorità" del ticket: Bassa, Media, Alta, Bloccante.
 
 function rollRarity(luck: number, min = 0): number {
@@ -60,6 +60,13 @@ function weaponUpgradeCard(g: Game, w: WeaponInstance, rarity: number): Card {
   };
 }
 
+/** Loadout budget: costo di un oggetto nuovo e quanto della risorsa resterà occupato dopo ("RAM 3 → 6/9"). */
+function installCost(g: Game, res: Resource, amount: number): Card['cost'] {
+  if (TUNING.loadout !== 'budget') return undefined;
+  const b = g[res];
+  return { res, amount, after: b.used + amount, max: b.max };
+}
+
 function newWeaponCard(g: Game, id: string): Card {
   const def = WEAPONS[id];
   return {
@@ -70,6 +77,7 @@ function newWeaponCard(g: Game, id: string): Card {
     level: 'Nuova',
     lines: [def.description],
     apply: () => g.addWeapon(id),
+    cost: installCost(g, 'ram', def.cost),
   };
 }
 
@@ -91,6 +99,7 @@ function passiveCard(g: Game, id: string, rarity: number): Card {
     level: owned ? `Lv ${owned.level} → ${owned.level + 1}` : 'Nuovo',
     lines,
     apply: () => g.addPassive(id, amt),
+    cost: owned ? undefined : installCost(g, 'cpu', def.cost),
   };
 }
 
@@ -125,12 +134,12 @@ export function upgradeCards(g: Game, minRarity = 0): Card[] {
   const options: Option[] = [];
   for (const w of g.weapons)
     if (w.level < w.def.maxLevel) options.push({ key: 'w' + w.def.id, weight: 1.3, make: (r) => weaponUpgradeCard(g, w, r) });
-  if (g.weapons.length < TUNING.maxWeapons)
-    for (const id of WEAPON_IDS)
-      if (!g.weapons.some((w) => w.def.id === id)) options.push({ key: 'n' + id, weight: 0.8, make: () => newWeaponCard(g, id) });
+  // oggetti nuovi solo se c'è posto: slot liberi, o RAM e CPU libere col loadout budget (niente carte che non ci stanno)
+  for (const id of WEAPON_IDS)
+    if (g.installBlock('ram', id) === null) options.push({ key: 'n' + id, weight: 0.8, make: () => newWeaponCard(g, id) });
   for (const id of PASSIVE_IDS) {
     const owned = g.passives.find((p) => p.id === id);
-    if (owned ? owned.level < PASSIVES[id].maxLevel : g.passives.length < TUNING.maxPassives)
+    if (owned ? owned.level < PASSIVES[id].maxLevel : g.installBlock('cpu', id) === null)
       options.push({ key: 'p' + id, weight: owned ? 1.1 : 0.7, make: (r) => passiveCard(g, id, r) });
   }
   const cards: Card[] = [];
@@ -149,6 +158,54 @@ export function upgradeCards(g: Game, minRarity = 0): Card[] {
   const fb = fallbackCards(g);
   while (cards.length < 3 && fb.length) cards.push(fb.shift()!);
   return cards;
+}
+
+// Premi del JOscar che allargano il budget (testi PC-09…14 di writing.md; icone di technical-artist)
+const PRIZES: Record<Resource, { icon: string; name: string; line: string; description: string }> = {
+  ram: { icon: 'ic_ram', name: 'Banco di RAM', line: '+{n} RAM', description: 'Richiesta hardware approvata. Dopo sei mesi.' },
+  cpu: { icon: 'ic_cpu', name: 'Processore Nuovo', line: '+{n} CPU', description: 'Dal magazzino IT, ancora nella plastica.' },
+};
+const RES_LABEL: Record<Resource, string> = { ram: 'RAM', cpu: 'CPU' };
+
+function budgetPrizeCard(g: Game, res: Resource): Card {
+  const p = PRIZES[res];
+  const n = TUNING.budget.prize;
+  const from = g[res].max;
+  return {
+    icon: p.icon,
+    name: p.name,
+    tag: 'Bonus',
+    rarity: 2,
+    level: `${RES_LABEL[res]} ${from} → ${from + n}`,
+    lines: [p.line.replace('{n}', String(n)), p.description],
+    apply: () => g.addBudget(res, n, true),
+    bonus: { res, from, to: from + n },
+  };
+}
+
+/**
+ * Premi del JOscar: le carte di upgradeCards (rarità almeno Alta). Col loadout budget, finché in partita non si sono presi
+ * `prizeMax` premi sul budget, l'ultima delle tre diventa «Banco di RAM» o «Processore Nuovo»: quello della risorsa più
+ * scarsa, cioè con meno spazio libero rispetto al massimo (a parità, a caso). Il giocatore sceglie se prenderlo al posto
+ * di una carta normale; il limite conta i premi presi, non quelli offerti.
+ */
+export function joscarCards(g: Game): Card[] {
+  const cards = upgradeCards(g, 2);
+  if (TUNING.loadout !== 'budget' || g.budgetPrizes >= TUNING.budget.prizeMax) return cards;
+  const free = (res: Resource) => (g[res].max - g[res].used) / g[res].max;
+  const d = free('ram') - free('cpu');
+  const res: Resource = d < 0 ? 'ram' : d > 0 ? 'cpu' : Math.random() < 0.5 ? 'ram' : 'cpu';
+  cards[cards.length - 1] = budgetPrizeCard(g, res);
+  return cards;
+}
+
+/** Barre e riga "insufficiente" della finestra delle carte; undefined con gli slot. */
+export function choiceBudget(g: Game): ChoiceBudget | undefined {
+  if (TUNING.loadout !== 'budget') return undefined;
+  const short: Resource[] = [];
+  if (WEAPON_IDS.some((id) => g.installBlock('ram', id) === 'ram')) short.push('ram');
+  if (PASSIVE_IDS.some((id) => g.installBlock('cpu', id) === 'cpu')) short.push('cpu');
+  return { ram: { ...g.ram }, cpu: { ...g.cpu }, short };
 }
 
 /** Macchinetta del caffè: tre bevande, ciascuna un bonus permanente. */

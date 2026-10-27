@@ -29,6 +29,7 @@ export const CHARACTERS: CharacterDef[] = [
     companion: 'duck',
     companionName: 'Paperella',
     startWeapon: 'duck',
+    budget: { ram: 9, cpu: 7 }, // loadout budget: la Paperella pesa 3, quindi 6 RAM libere come gli altri
     bonus: { attackSpeed: 0.1 },
     bonusText: '+10% velocità d\'attacco',
   },
@@ -41,6 +42,7 @@ export const CHARACTERS: CharacterDef[] = [
     companion: 'mug',
     companionName: 'Tazza',
     startWeapon: 'slides',
+    budget: { ram: 8, cpu: 7 },
     bonus: { xpGain: 0.15 },
     bonusText: '+15% esperienza',
   },
@@ -53,6 +55,7 @@ export const CHARACTERS: CharacterDef[] = [
     companion: 'router',
     companionName: 'Router',
     startWeapon: 'firewall',
+    budget: { ram: 8, cpu: 7 },
     bonus: { maxHp: 25, armor: 1 },
     bonusText: '+25 HP, +1 armatura',
   },

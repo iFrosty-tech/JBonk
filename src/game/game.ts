@@ -13,8 +13,8 @@ import { CityWorld } from '../render/city';
 import { type GameWorld, World } from '../render/world';
 import type { Audio } from './audio';
 import { CameraRig } from './camera';
-import { shrineCards, upgradeCards } from './cards';
-import type { ChoiceRequest, DamageNumber, Enemy, Fx, InteractKind, Interactable, Pickup, PickupKind, Player, Projectile } from './entities';
+import { choiceBudget, joscarCards, shrineCards, upgradeCards } from './cards';
+import type { Budget, ChoiceRequest, DamageNumber, Enemy, Fx, InteractKind, Interactable, Pickup, PickupKind, Player, Projectile, Resource } from './entities';
 import type { Input } from './input';
 import { SpatialHash } from './spatial';
 import { WeaponInstance, drawWeapon, splitProjectile, updateWeapon } from './weapons';
@@ -97,6 +97,11 @@ export class Game {
   weapons: WeaponInstance[] = [];
   passives: { id: string; level: number; value: number }[] = [];
   private buffs: Partial<Record<StatKey, number>> = {};
+  /** Loadout budget: RAM delle armi e CPU dei passivi, aggiornate a ogni installazione o premio. Le legge l'UI. */
+  readonly ram: Budget = { used: 0, max: 0 };
+  readonly cpu: Budget = { used: 0, max: 0 };
+  private readonly budgetBonus: Record<Resource, number> = { ram: 0, cpu: 0 };
+  budgetPrizes = 0; // premi del JOscar sul budget presi in questa partita
   /** Scorciatoie di Vim: true in INSERT (hai il passivo e nessun input di movimento da `TUNING.stillDelay` s). Lo legge l'HUD. */
   insertMode = false;
   private stillT = 0; // secondi senza input di movimento né scatto
@@ -294,6 +299,7 @@ export class Game {
   addWeapon(id: string) {
     if (this.weapons.some((w) => w.def.id === id)) return;
     this.weapons.push(new WeaponInstance(WEAPONS[id]));
+    this.refreshBudget();
   }
 
   addPassive(id: string, amount: number) {
@@ -303,6 +309,41 @@ export class Game {
       p.value += amount;
     } else this.passives.push({ id, level: 1, value: amount });
     this.recomputeStats();
+    this.refreshBudget();
+  }
+
+  /**
+   * Perché un'arma (`ram`) o un passivo (`cpu`) nuovo non si può installare, o null se si può.
+   * 'owned' = già installato; 'full' = slot pieni o tetti del budget; 'ram'/'cpu' = risorsa insufficiente.
+   */
+  installBlock(res: Resource, id: string): 'owned' | 'full' | Resource | null {
+    const weapon = res === 'ram';
+    if (weapon ? this.weapons.some((w) => w.def.id === id) : this.passives.some((p) => p.id === id)) return 'owned';
+    const count = weapon ? this.weapons.length : this.passives.length;
+    if (TUNING.loadout === 'slots') return count < (weapon ? TUNING.maxWeapons : TUNING.maxPassives) ? null : 'full';
+    const b = TUNING.budget;
+    if (count >= (weapon ? b.maxWeapons : b.maxPassives) || this.weapons.length + this.passives.length >= b.maxItems) return 'full';
+    const r = this[res];
+    return (weapon ? WEAPONS[id].cost : PASSIVES[id].cost) <= r.max - r.used ? null : res;
+  }
+
+  /** Allarga una risorsa del loadout budget; `prize` = premio del JOscar, che conta per il limite a partita. */
+  addBudget(res: Resource, amount: number, prize = false) {
+    this.budgetBonus[res] += amount;
+    if (prize) this.budgetPrizes++;
+    this.refreshBudget();
+  }
+
+  /** Ricalcola RAM e CPU usate e massime: solo quando cambiano armi, passivi o bonus, mai a ogni frame. */
+  private refreshBudget() {
+    let ram = 0;
+    for (const w of this.weapons) ram += w.def.cost;
+    let cpu = 0;
+    for (const p of this.passives) cpu += PASSIVES[p.id].cost;
+    this.ram.used = ram;
+    this.ram.max = this.character.budget.ram + this.budgetBonus.ram;
+    this.cpu.used = cpu;
+    this.cpu.max = this.character.budget.cpu + this.budgetBonus.cpu;
   }
 
   addBuff(stat: StatKey, amount: number) {
@@ -757,6 +798,7 @@ export class Game {
         title: `Promozione! Livello ${lvl}`,
         subtitle: 'Scegli un ticket da prendere in carico',
         cards: upgradeCards(this),
+        budget: choiceBudget(this),
         skipLabel: 'Rimanda (+5 €)',
         onSkip: () => {
           this.gold += 5;
@@ -1284,7 +1326,7 @@ export class Game {
       if (!best.free) this.chestsOpened++;
       best.used = true;
       this.audio.play('open');
-      this.queueChoice(() => ({ title: 'Ordine approvato!', subtitle: 'Il budget è arrivato: scegli cosa comprare', cards: upgradeCards(this, 1), skipLabel: null }));
+      this.queueChoice(() => ({ title: 'Ordine approvato!', subtitle: 'Il budget è arrivato: scegli cosa comprare', cards: upgradeCards(this, 1), skipLabel: null, budget: choiceBudget(this) }));
     } else if (best.kind === 'altar' && !this.bossSpawned) {
       best.used = true;
       this.spawnBoss();
@@ -1330,7 +1372,7 @@ export class Game {
     // la scelta arriva dopo la festa, così i coriandoli si vedono
     this.delayedChoices.push({
       t: 1.3,
-      make: () => ({ title: 'Premio JOscar', subtitle: `Miglior contributo a ${project}: scegli il premio`, cards: upgradeCards(this, 2), skipLabel: null }),
+      make: () => ({ title: 'Premio JOscar', subtitle: `Miglior contributo a ${project}: scegli il premio`, cards: joscarCards(this), skipLabel: null, budget: choiceBudget(this) }),
     });
   }
 
