@@ -76,12 +76,13 @@ su iPhone si ottiene aggiungendo la pagina alla schermata Home.
   <img src="docs/media/mobile.png" alt="JBonk su telefono in orizzontale, al tramonto tra la piscina e i campi in terra rossa: joystick sotto il pollice sinistro, pulsanti Salta e Scatto a destra, HUD compatto" width="640">
 </p>
 
-Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti, `T` +1 ora, `O` +100 €, `N` nuova arma (prima le ultime aggiunte), `C` carta Soldo, `F` onda del radar NGH, `J` statuetta JOscar, `V` passivo Scorciatoie di Vim (un livello a ogni pressione), `Y` una Call di Gruppo davanti al giocatore, `U` un Aggiornamento davanti al giocatore.
+Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti, `T` +1 ora, `O` +100 €, `N` nuova arma (prima le ultime aggiunte), `C` carta Soldo, `F` onda del radar NGH, `J` statuetta JOscar, `V` passivo Scorciatoie di Vim (un livello a ogni pressione), `Y` una Call di Gruppo davanti al giocatore, `U` un Aggiornamento davanti al giocatore, `R` +1 RAM e +1 CPU (solo col loadout a budget).
 
 ## Il loop di gioco
 
 - **Giornata = livello.** Dalle 09:00 alle 18:00 (6 minuti reali). Le ondate crescono nel tempo, ci sono sciami a orari fissi e un "guardiano" (élite) ogni 80 s.
 - **Level-up = promozione.** Si sceglie 1 tra 3 carte-ticket. La rarità è la priorità del ticket (Bassa → Bloccante) e scala il bonus.
+- **PC aziendale (loadout).** Al posto degli slot fissi le armi occupano RAM e i passivi CPU: ogni carta nuova mostra il suo costo ("RAM 3", "CPU 2") e quanto resterà libero, e una carta che non ci sta non viene proposta. Il budget cresce solo coi premi del JOscar «Banco di RAM» e «Processore Nuovo» (al massimo due a partita). Con `loadout: 'slots'` in `config/tuning.ts` si torna a 4 armi + 4 passivi.
 - **Ordini d'acquisto** (forzieri): costano buoni pasto e danno una carta di rarità almeno Media. I guardiani ne lasciano uno gratis.
 - **Macchinette del caffè** (santuari): restandoci vicino si ottiene un bonus permanente, a scelta tra 3 bevande.
 - **Presidi GPI** (roll-up "The Healthcare Partner"): restandoci vicino si recuperano HP, fino a esaurire la scorta del presidio.
@@ -285,6 +286,7 @@ dati in `maps/types.ts`.
 
 - **Arma**: in `config/weapons.ts` scegli un `kind` tra `projectile | orbit | aura | radial | strike | chain | minion | lob | boomerang | split | swarm`, poi imposta statistiche base e upgrade. Un comportamento nuovo va aggiunto in `game/weapons.ts`. Alcuni tipi cercano sprite con suffissi fissi: `minion` (`_idle`, `_hit`, `_spark`), `lob` (`_splash`, `_steam`), `split` (`_l`, `_r`, `_stem`, `_burst`; `pierce` è il numero di shard), `swarm` (celle `_c0`…, `_fly`, `_burst`, più la disposizione dell'alveare in `HIVES` dentro `logos/index.ts`).
 - **Passivo**: in `config/passives.ts` indica la statistica (`stat`), il valore per livello e il formato.
+- **Costo nel loadout**: armi e passivi hanno un `cost` obbligatorio (RAM per le armi, CPU per i passivi), proporzionale al valore dell'oggetto: le formule e i costi di riferimento sono in `docs/design/balance.md` §5.
 
 ## Screenshot e GIF del README
 

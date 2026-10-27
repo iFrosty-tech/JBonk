@@ -9,6 +9,7 @@ const list: WeaponDef[] = [
     icon: 'duck',
     sprite: 'duck',
     maxLevel: 10,
+    cost: 3, // RAM in modalità loadout budget (balance §5, variante B)
     base: { damage: 18, cooldown: 0.75, count: 1, area: 1, speed: 24, pierce: 1, duration: 1.4, range: 30, knockback: 0.8 },
     upgrades: [
       { stat: 'damage', amount: 5, mode: 'add', label: 'Danno' },
@@ -26,6 +27,7 @@ const list: WeaponDef[] = [
     icon: 'slide',
     sprite: 'slide',
     maxLevel: 10,
+    cost: 2, // RAM in modalità loadout budget (balance §5, variante B)
     base: { damage: 13, cooldown: 0.4, count: 3, area: 1, speed: 2.8, pierce: 0, duration: 1, range: 3.4, knockback: 1.2 },
     upgrades: [
       { stat: 'damage', amount: 4, mode: 'add', label: 'Danno' },
@@ -42,6 +44,7 @@ const list: WeaponDef[] = [
     icon: 'ic_firewall',
     sprite: 'flame',
     maxLevel: 10,
+    cost: 2, // RAM in modalità loadout budget (balance §5, variante B)
     base: { damage: 9, cooldown: 0.5, count: 1, area: 1, speed: 1, pierce: 0, duration: 1, range: 4.4, knockback: 0.3 },
     upgrades: [
       { stat: 'damage', amount: 3, mode: 'add', label: 'Danno' },
@@ -57,6 +60,7 @@ const list: WeaponDef[] = [
     icon: 'mail',
     sprite: 'mail',
     maxLevel: 10,
+    cost: 1, // RAM in modalità loadout budget (balance §5, variante B)
     base: { damage: 11, cooldown: 2.0, count: 6, area: 1, speed: 17, pierce: 1, duration: 1.3, range: 0, knockback: 0.6 },
     upgrades: [
       { stat: 'damage', amount: 4, mode: 'add', label: 'Danno' },
@@ -73,6 +77,7 @@ const list: WeaponDef[] = [
     icon: 'rocket',
     sprite: 'boom',
     maxLevel: 10,
+    cost: 2, // RAM in modalità loadout budget (balance §5, variante B)
     base: { damage: 36, cooldown: 2.4, count: 1, area: 1, speed: 1, pierce: 0, duration: 0.6, range: 22, knockback: 2 },
     upgrades: [
       { stat: 'damage', amount: 10, mode: 'add', label: 'Danno' },
@@ -89,6 +94,7 @@ const list: WeaponDef[] = [
     icon: 'ic_stack',
     sprite: 'spark',
     maxLevel: 10,
+    cost: 3, // RAM in modalità loadout budget (balance §5, variante B)
     base: { damage: 18, cooldown: 1.5, count: 1, area: 1, speed: 1, pierce: 3, duration: 1, range: 18, knockback: 0.4 },
     upgrades: [
       { stat: 'damage', amount: 5, mode: 'add', label: 'Danno' },
@@ -106,6 +112,7 @@ const list: WeaponDef[] = [
     sprite: 'claude', // camminata; usa anche claude_idle e claude_hit
     scale: 1.2,
     maxLevel: 10,
+    cost: 2, // RAM in modalità loadout budget (balance §5, variante B)
     base: { damage: 15, cooldown: 0.6, count: 1, area: 1, speed: 13, pierce: 0, duration: 1, range: 18, knockback: 0.6 },
     upgrades: [
       { stat: 'damage', amount: 5, mode: 'add', label: 'Danno' },
@@ -124,6 +131,7 @@ const list: WeaponDef[] = [
     scale: 0.9,
     blocks: true,
     maxLevel: 10,
+    cost: 2, // RAM in modalità loadout budget (balance §5, variante B)
     base: { damage: 15, cooldown: 0.5, count: 2, area: 1, speed: 2.2, pierce: 0, duration: 1, range: 4.6, knockback: 2.4 },
     upgrades: [
       { stat: 'damage', amount: 5, mode: 'add', label: 'Danno' },
@@ -141,6 +149,7 @@ const list: WeaponDef[] = [
     sprite: 'java', // in volo; il vapore della pozza è java_steam
     scale: 1.3,
     maxLevel: 10,
+    cost: 1, // RAM in modalità loadout budget (balance §5, variante B)
     base: { damage: 8, cooldown: 2.4, count: 1, area: 1, speed: 1, pierce: 0, duration: 2.5, range: 20, knockback: 0 },
     upgrades: [
       { stat: 'damage', amount: 3, mode: 'add', label: 'Danno' },
@@ -159,6 +168,7 @@ const list: WeaponDef[] = [
     sprite: 'spring_spin',
     scale: 1.9,
     maxLevel: 10,
+    cost: 3, // RAM in modalità loadout budget (balance §5, variante B)
     base: { damage: 16, cooldown: 1.5, count: 1, area: 1, speed: 24, pierce: 0, duration: 1, range: 14, knockback: 1 },
     upgrades: [
       { stat: 'damage', amount: 6, mode: 'add', label: 'Danno' },
@@ -177,6 +187,7 @@ const list: WeaponDef[] = [
     sprite: 'mongo', // in volo; gli shard sono mongo_l e mongo_r, poi mongo_stem e mongo_burst
     scale: 1.6,
     maxLevel: 10,
+    cost: 3, // RAM in modalità loadout budget (balance §5, variante B)
     base: { damage: 20, cooldown: 1.1, count: 1, area: 1, speed: 18, pierce: 2, duration: 1.5, range: 26, knockback: 0.6 },
     upgrades: [
       { stat: 'damage', amount: 5, mode: 'add', label: 'Danno' },
@@ -193,6 +204,7 @@ const list: WeaponDef[] = [
     icon: 'jpanik',
     sprite: 'jpanik', // alveare: celle jpanik_c0…jpanik_c7, in volo jpanik_fly, esplosione jpanik_burst
     maxLevel: 10,
+    cost: 2, // RAM in modalità loadout budget (balance §5, variante B)
     base: { damage: 14, cooldown: 1.2, count: 2, area: 1, speed: 16, pierce: 0, duration: 0.8, range: 24, knockback: 0.5 },
     upgrades: [
       { stat: 'damage', amount: 4, mode: 'add', label: 'Danno' },

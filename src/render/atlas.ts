@@ -600,6 +600,9 @@ const sprites: SpriteDef[] = [
   { id: 'ic_multi', cw: 1, ch: 1, draw: (g) => emoji(g, '🗂️', 64, 68, 92) },
   // Scorciatoie di Vim: il rombo verde con la V, che deve leggersi anche a 28 px
   { id: 'ic_vim', cw: 1, ch: 1, draw: (g) => vimLogo(g) },
+  // Premi del JOscar nel loadout "PC aziendale": Banco di RAM e Processore Nuovo (ancora nella plastica)
+  { id: 'ic_ram', cw: 1, ch: 1, draw: (g) => ramStick(g) },
+  { id: 'ic_cpu', cw: 1, ch: 1, draw: (g) => cpuBlister(g) },
 
   // Raccoglibili
   { id: 'xp1', cw: 1, ch: 1, draw: (g) => gem(g, '#4c86ff') },
@@ -757,6 +760,41 @@ function updateBox(g: G, fill: number, i: number) {
     g.fill();
   }
   g.restore();
+}
+
+const GOLD = '#e3b33c';
+
+/** Modulo di RAM in diagonale: scheda verde, quattro chip neri e il pettine di contatti dorati. */
+function ramStick(g: G) {
+  g.save();
+  g.translate(64, 66);
+  g.rotate(-0.55);
+  rr(g, -58, -24, 116, 48, 5, '#2f8f4e', true, 4);
+  for (let k = 0; k < 18; k++) {
+    if (k === 7) continue; // la tacca del pettine
+    rr(g, -54 + k * 6, 12, 4, 10, 1, GOLD, false);
+  }
+  for (let k = 0; k < 4; k++) rr(g, -50 + k * 26, -17, 22, 25, 2, '#1d2333', false);
+  g.restore();
+}
+
+/** Processore nel blister di plastica, con l'aletta forata per appenderlo e un riflesso sulla plastica. */
+function cpuBlister(g: G) {
+  rr(g, 44, 2, 40, 22, 7, '#d6ecf8', true, 3.5);
+  circ(g, 64, 11, 4.5, '#7e98ab', false);
+  rr(g, 12, 16, 104, 108, 18, '#d6ecf8', true, 4);
+  for (let k = 0; k < 5; k++) {
+    const p = 40 + k * 11;
+    rr(g, p, 30, 5, 8, 1, GOLD, false);
+    rr(g, p, 102, 5, 8, 1, GOLD, false);
+    rr(g, 26, p + 8, 8, 5, 1, GOLD, false);
+    rr(g, 94, p + 8, 8, 5, 1, GOLD, false);
+  }
+  rr(g, 32, 36, 64, 68, 6, '#2a2f3a', true, 3);
+  rr(g, 43, 48, 42, 44, 4, '#c9ced8', true, 3);
+  poly(g, [36, 40, 46, 40, 36, 50], GOLD, false);
+  // riflesso della plastica
+  poly(g, [22, 64, 22, 40, 46, 22, 58, 22], '#ffffff', false);
 }
 
 /** Logo di Vim semplificato: rombo verde a due toni e V argentata con le grazie che escono dal rombo. */

@@ -4,7 +4,7 @@ import { ENEMIES } from '../config/enemies';
 import { TUNING } from '../config/tuning';
 import { WEAPONS } from '../config/weapons';
 import type { Audio } from '../game/audio';
-import type { ChoiceRequest } from '../game/entities';
+import type { Budget, ChoiceRequest } from '../game/entities';
 import type { RunResult } from '../game/game';
 import type { Atlas } from '../render/atlas';
 
@@ -34,6 +34,19 @@ function updatingGlyph() {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11"/>' +
     '<path d="M15 6.8A6 6 0 1 1 9 6.8"/><path d="M7.65 10.47L9 6.8L5.15 6.13"/></svg>';
   return s;
+}
+
+/** Loadout budget: le due barre a tacche su una riga, RAM prima di CPU, con "usata/totale" accanto a ciascuna. */
+function budgetBars(ram: Budget, cpu: Budget) {
+  const bar = (label: string, b: Budget) =>
+    h(
+      'span',
+      { class: 'bar' },
+      label,
+      h('span', { class: 'ticks', 'aria-hidden': 'true' }, ...Array.from({ length: b.max }, (_, i) => h('i', i < b.used ? {} : { class: 'free' }))),
+      `${b.used}/${b.max}`,
+    );
+  return h('div', { class: 'budget-bars' }, bar('RAM', ram), h('span', { class: 'sep' }, '·'), bar('CPU', cpu));
 }
 
 function fmtTime(s: number) {
@@ -174,18 +187,31 @@ export class Screens {
     req.cards.forEach((c, i) => {
       const prio = `var(--p${c.rarity})`;
       const art = c.updating ? h('span', { class: 'art-upd' }, icon(this.atlas, c.icon, 52), updatingGlyph()) : icon(this.atlas, c.icon, 52);
+      // loadout budget, oggetto nuovo: il costo sta nella riga che c'è già ("Nuova · RAM 2 → 8/9"), la carta non si allunga
+      const level = c.cost
+        ? h('small', {}, `${c.level} · `, h('span', { class: 'chip' }, `${c.cost.res.toUpperCase()} ${c.cost.amount}`), ` → ${c.cost.after}/${c.cost.max}`)
+        : h('small', {}, c.level);
       const t = h(
         'button',
         { class: 'ticket', type: 'button', id: `card-${i}` },
         h('header', {}, h('span', {}, `OB-${this.ticketSeq++} · ${c.tag}`), h('span', { class: 'prio' }, TUNING.rarity.names[c.rarity])),
-        h('div', { class: 'body' }, art, h('b', {}, c.name), h('small', {}, c.level), h('ul', {}, ...c.lines.map((l) => h('li', {}, l)))),
+        h('div', { class: 'body' }, art, h('b', {}, c.name), level, h('ul', {}, ...c.lines.map((l) => h('li', {}, l)))),
         h('kbd', {}, String(i + 1)),
       );
       t.style.setProperty('--prio', prio);
       t.addEventListener('click', () => choose(i));
       tickets.append(t);
     });
-    const modal = h('div', { class: 'modal' }, h('h2', {}, req.title), h('p', {}, req.subtitle), tickets);
+    const modal = h('div', { class: 'modal' }, h('h2', {}, req.title), h('p', {}, req.subtitle));
+    // loadout budget: barre sotto il sottotitolo e, se il filtro ha escluso oggetti nuovi, il perché (mai in combattimento)
+    const b = TUNING.loadout === 'budget' ? req.budget : undefined;
+    if (b) {
+      modal.append(budgetBars(b.ram, b.cpu));
+      const ram = b.short.includes('ram');
+      const cpu = b.short.includes('cpu');
+      if (ram || cpu) modal.append(h('p', { class: 'budget-short' }, ram && cpu ? 'RAM e CPU insufficienti' : ram ? 'RAM insufficiente' : 'CPU insufficiente'));
+    }
+    modal.append(tickets);
     if (req.skipLabel) {
       const skip = h('button', { class: 'link', type: 'button' }, req.skipLabel);
       skip.addEventListener('click', () => {
@@ -204,7 +230,8 @@ export class Screens {
     });
   }
 
-  pause(resume: () => void, restart: () => void, menu: () => void, audio: Audio) {
+  /** `budget`: RAM e CPU della partita; le barre compaiono solo con il loadout budget. */
+  pause(resume: () => void, restart: () => void, menu: () => void, audio: Audio, budget?: { ram: Budget; cpu: Budget }) {
     const r = h('button', { class: 'btn', type: 'button', id: 'resume' }, 'Riprendi');
     const rs = h('button', { class: 'btn secondary', type: 'button' }, 'Ricomincia');
     const m = h('button', { class: 'btn secondary', type: 'button' }, 'Menu principale');
@@ -222,7 +249,14 @@ export class Screens {
     const node = h(
       'div',
       { class: 'screen dim' },
-      h('div', { class: 'panel' }, h('h2', {}, 'Pausa pranzo'), h('p', {}, 'Il timer è fermo. Le mail, purtroppo, no.'), h('div', { class: 'actions' }, r, rs, m, a)),
+      h(
+        'div',
+        { class: 'panel' },
+        h('h2', {}, 'Pausa pranzo'),
+        h('p', {}, 'Il timer è fermo. Le mail, purtroppo, no.'),
+        ...(TUNING.loadout === 'budget' && budget ? [budgetBars(budget.ram, budget.cpu)] : []),
+        h('div', { class: 'actions' }, r, rs, m, a),
+      ),
     );
     this.show(node, (e) => {
       if (e.code === 'Escape' || e.code === 'KeyP') resume();

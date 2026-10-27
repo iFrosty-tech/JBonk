@@ -36,6 +36,8 @@ export interface CharacterDef {
   companion: SpriteId;
   companionName: string;
   startWeapon: string;
+  /** Loadout budget: RAM per le armi (arma iniziale compresa) e CPU per i passivi. Con gli slot non conta. */
+  budget: { ram: number; cpu: number };
   bonus: Partial<Stats>;
   bonusText: string;
 }
@@ -182,6 +184,8 @@ export interface WeaponDef {
   base: WeaponStats;
   upgrades: UpgradeDef[];
   maxLevel: number;
+  /** Loadout budget: RAM occupata, pagata una volta all'installazione (i livelli sono gratis). */
+  cost: number;
   /** Altezza a schermo dello sprite (unità mondo, prima del moltiplicatore d'area). */
   scale?: number;
   /** Solo 'orbit': gli oggetti in orbita distruggono i proiettili nemici. */
@@ -205,6 +209,8 @@ export interface PassiveDef {
   amount: number;
   fmt: StatFormat;
   maxLevel: number;
+  /** Loadout budget: CPU occupata, pagata una volta all'installazione (i livelli sono gratis). */
+  cost: number;
   /**
    * Passivo a due modalità (Scorciatoie di Vim): al posto di `stat` vale l'effetto della modalità attiva.
    * `still` = nessun input di movimento da `TUNING.stillDelay` secondi, `moving` = altrimenti.

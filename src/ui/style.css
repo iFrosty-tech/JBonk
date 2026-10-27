@@ -292,6 +292,46 @@ button:focus-visible,
   padding: 0 4px;
   border-radius: 3px;
 }
+/* loadout a budget, desktop: "Gestione attività". Riga delle armi = RAM, dei passivi = CPU;
+   ogni oggetto è un blocco largo costo × 36 px, la parte libera è tratteggiata, a fine riga "usata/totale" */
+.slots.budget .row {
+  align-items: center;
+  gap: 4px;
+}
+.slots.budget .res,
+.slots.budget .use {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--paper);
+  background: rgba(16, 19, 28, 0.75);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.slots.budget .res {
+  width: 3ch;
+  text-align: center;
+}
+.slots.budget .use {
+  margin-left: 2px;
+  color: var(--paper-2);
+}
+.slots.budget .slot {
+  box-sizing: border-box;
+  width: calc(var(--u, 1) * 36px - 4px);
+  height: 48px;
+}
+.slots.budget .slot > i {
+  scale: 0.78;
+}
+@media (max-width: 640px), (max-height: 500px) {
+  .slots.budget .slot {
+    height: 38px;
+  }
+  .slots.budget .slot > i {
+    scale: 0.62;
+  }
+}
 /* Scorciatoie di Vim in INSERT: lo slot si accende (bordo più chiaro e alone, non solo colore) */
 .slot.lit {
   border-color: var(--ok);
@@ -774,6 +814,61 @@ button:focus-visible,
   font-size: 19px;
   line-height: 1.1;
 }
+/* loadout a budget: costo nella riga che c'è già sotto il nome ("Nuova · RAM 2 → 8/9"), la carta non si allunga */
+.ticket .body small {
+  white-space: nowrap;
+}
+.ticket .body small .chip {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+/* le due barre a tacche, una riga sola, RAM prima di CPU (scelta delle carte e pausa) */
+.budget-bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--paper);
+}
+.budget-bars .bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.budget-bars .ticks {
+  display: inline-flex;
+  gap: 2px;
+}
+/* tacca piena = occupata, vuota = libera: si distinguono per forma, non solo per colore */
+.budget-bars .ticks i {
+  width: 6px;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--paper);
+}
+.budget-bars .ticks i.free {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--muted);
+}
+.budget-bars .sep {
+  color: var(--muted);
+}
+/* in pausa il pannello è allineato a sinistra: le barre seguono il testo */
+.panel .budget-bars {
+  justify-content: flex-start;
+}
+.budget-short {
+  margin: -6px 0 0;
+  color: var(--postit);
+  font-weight: 700;
+  font-size: 15px;
+}
 /* arma in aggiornamento: glifo ⟳ in basso a destra sull'icona della carta */
 .ticket .body .art-upd {
   grid-row: span 2;
@@ -1141,6 +1236,22 @@ button:focus-visible,
 }
 #app.touch .slot > i {
   scale: 0.7;
+}
+/* oltre 8 oggetti (loadout a budget, fino a 10): slot da 24 px (28 col bordo) */
+#app.touch .slots.dense .slot {
+  width: 24px;
+  height: 24px;
+}
+#app.touch .slots.dense .slot > i {
+  scale: 0.6;
+}
+/* in orizzontale la riga lunga parte da sinistra, subito dopo il joystick a riposo (che a quell'altezza
+   occupa solo x ≈ 85–115), così 10 icone arrivano a ~452 px e non toccano lo Scatto nemmeno a 667 px */
+@media (orientation: landscape) {
+  #app.touch .slots.dense {
+    left: calc(max(16px, env(safe-area-inset-left, 0px)) + 114px);
+    transform: none;
+  }
 }
 /* col touch -- INSERT -- sta al centro, sopra la riga degli slot */
 #app.touch .vim-insert {

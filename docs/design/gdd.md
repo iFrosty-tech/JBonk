@@ -434,7 +434,7 @@ Al giro 2 raccomandavo C. Ho cambiato idea per i conti di bilanciamento e perch�
 | Finestra della scelta | titolo e carte | sotto il sottotitolo, su una riga e **nello stesso ordine delle righe dell'HUD (armi sopra)**: "RAM 6/9 · CPU 4/7" a tacche |
 | Ordini d'acquisto (forzieri) | carta di rarità almeno Media | invariati: nessuna carta che allarga il budget (ne arriverebbero 2–3 a partita e il vincolo sparirebbe) |
 | Macchinette del caffè | bonus permanenti fuori dagli slot | invariate: le bevande non costano nulla |
-| JOscar | premio, carte almeno Alte | tra i premi anche «Banco di RAM» (+1 RAM) o «Processore Nuovo» (+1 CPU): carta con tag "Bonus" e, sotto il nome, "RAM 9 → 10". Nessun banner: la scelta stessa è il feedback. Al massimo `⟨+2⟩` a partita |
+| JOscar | premio, carte almeno Alte | tra i premi anche «Banco di RAM» (+1 RAM) o «Processore Nuovo» (+1 CPU): carta con tag "Bonus" e, sotto il nome, "RAM 9 → 10". Nessun banner: la scelta stessa è il feedback. Al massimo `⟨+2⟩` a partita. Fase 2, decisione del lead: è una sola carta delle tre (l'ultima), sulla risorsa con meno spazio libero rispetto al massimo (a parità a caso), così le altre due restano premi veri |
 | Personaggi | stessi slot per tutti | RAM totale diversa solo per compensare il peso dell'arma iniziale (vedi le regole): tutti partono con le stesse risorse libere, quindi **nessun chip del budget nella schermata del titolo**. Un chip col totale farebbe credere a una differenza che in gioco non c'è (ux e bilanciamento). Il chip torna solo se un giorno le risorse libere alla partenza saranno diverse |
 | HUD in combattimento | due file di 4 slot | **desktop**: le due righe diventano "Gestione attività": icone larghe in proporzione al costo, parte libera tratteggiata. **Telefono**: icone di dimensione fissa come oggi, nessuna barra in combattimento |
 | Risorsa insufficiente | slot pieni | **non** nell'HUD in combattimento: nella finestra della scelta, una riga sotto le barre quando il filtro ha escluso oggetti nuovi: "RAM insufficiente", "CPU insufficiente" o "RAM e CPU insufficienti" (`PC-06…08`). "Insufficiente" è vero anche quando la risorsa è quasi piena (6/7 e niente da 1), "al 100%" no |
@@ -454,7 +454,7 @@ Al giro 2 raccomandavo C. Ho cambiato idea per i conti di bilanciamento e perch�
 - Una carta che non ci sta **non viene proposta** (come oggi con gli slot pieni): niente carte morte. Se non ci sta più niente di nuovo restano upgrade e carte di riserva (Rimborso Spese, Pizza di Team), come oggi.
 - Si sceglie durante la partita, con le carte, come oggi. Nessuna scelta prima della partita.
 - Niente disinstallazione ("Termina attività") nella prima versione: richiede una schermata in più. Da valutare dopo il playtest. Per lo stesso motivo nessun testo invita a "liberare RAM".
-- Tutto dietro un flag in `tuning.ts` (`loadout: 'slots' | 'budget'`): si confrontano le due versioni giocando, senza buttare via gli slot.
+- Tutto dietro un flag in `tuning.ts` (`loadout: 'slots' | 'budget'`): si confrontano le due versioni giocando, senza buttare via gli slot. Fase 2: default `'budget'`, perché Marco ha approvato B.
 
 ### Pro e contro di B rispetto agli slot
 
