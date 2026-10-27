@@ -34,6 +34,8 @@ export class Hud {
   private mini: HTMLCanvasElement;
   private mctx: CanvasRenderingContext2D;
   private slots: HTMLDivElement;
+  private insert: HTMLDivElement;
+  private vimSlot: HTMLElement | null = null;
   private prompt: HTMLDivElement;
   private hint: HTMLDivElement;
   private banners: HTMLDivElement;
@@ -79,6 +81,9 @@ export class Hud {
     this.mctx = this.mini.getContext('2d')!;
 
     this.slots = el('div', 'slots', this.root);
+    // Scorciatoie di Vim: la riga di stato vive dentro gli slot, così li segue in ogni layout
+    this.insert = el('div', 'vim-insert');
+    this.insert.textContent = '-- INSERT --';
     this.prompt = el('div', 'prompt', this.root);
     this.prompt.hidden = true;
     this.hint = el('div', 'hint', this.root);
@@ -158,23 +163,32 @@ export class Hud {
         ? 'Pollice sinistro: muoviti · trascina a destra: camera · due dita: zoom'
         : 'Clicca sul gioco per guidare la camera col mouse (oppure trascina) · Esc per la pausa';
     });
-    this.hint.hidden = g.mode !== 'play' || (touch ? g.runTime > 10 || !!g.prompt : g.input.locked);
+    // col touch il suggerimento sta nella stessa fascia di -- INSERT --: in INSERT cede il posto
+    this.hint.hidden = g.mode !== 'play' || (touch ? g.runTime > 10 || !!g.prompt || g.insertMode : g.input.locked);
 
     const slotKey = g.weapons.map((w) => w.def.id + w.level).join() + '|' + g.passives.map((x) => x.id + x.level).join();
     this.set('slots', slotKey, () => this.renderSlots(g));
+    // in NORMAL nessuna scritta, senza Vim mai (insertMode resta false)
+    this.set('insert', String(g.insertMode), () => {
+      this.insert.classList.toggle('on', g.insertMode);
+      this.vimSlot?.classList.toggle('lit', g.insertMode);
+    });
 
     this.drawNumbers(g);
     this.drawMinimap(g);
   }
 
   private renderSlots(g: Game) {
-    this.slots.replaceChildren();
-    const mk = (icons: { icon: string; level: number; title: string }[], max: number) => {
+    this.slots.replaceChildren(this.insert);
+    this.vimSlot = null;
+    this.cache.delete('insert'); // lo slot di Vim è nuovo: va riacceso al prossimo controllo
+    const mk = (icons: { id: string; icon: string; level: number; title: string }[], max: number) => {
       const row = el('div', 'row', this.slots);
       for (let i = 0; i < max; i++) {
         const it = icons[i];
         const s = el('div', it ? 'slot' : 'slot empty', row);
         if (!it) continue;
+        if (it.id === 'vim') this.vimSlot = s;
         s.title = it.title;
         const ic = el('i', '', s);
         ic.setAttribute('style', this.atlas.iconStyle(it.icon, 36));
@@ -182,8 +196,8 @@ export class Hud {
         lv.textContent = String(it.level);
       }
     };
-    mk(g.weapons.map((w) => ({ icon: w.def.icon, level: w.level, title: w.def.name })), TUNING.maxWeapons);
-    mk(g.passives.map((p) => ({ icon: PASSIVES[p.id].icon, level: p.level, title: PASSIVES[p.id].name })), TUNING.maxPassives);
+    mk(g.weapons.map((w) => ({ id: '', icon: w.def.icon, level: w.level, title: w.def.name })), TUNING.maxWeapons);
+    mk(g.passives.map((p) => ({ id: p.id, icon: PASSIVES[p.id].icon, level: p.level, title: PASSIVES[p.id].name })), TUNING.maxPassives);
   }
 
   private drawNumbers(g: Game) {

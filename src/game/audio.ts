@@ -16,13 +16,24 @@ type Sfx =
   | 'split'
   | 'pop'
   | 'ping'
-  | 'fanfare';
+  | 'fanfare'
+  | 'keypress';
+
+/** Intervallo minimo (s) tra due suoni uguali; chi non è in tabella usa 0,02 s. */
+const MIN_GAP: Partial<Record<Sfx, number>> = {
+  hit: 0.05,
+  pop: 0.05,
+  pickup: 0.03,
+  keypress: 1, // Vim in INSERT: chi si ferma spesso non deve sentirlo di continuo
+};
 
 export class Audio {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   muted = false;
   private last = new Map<Sfx, number>();
+  /** Raffica di rumore di 12 ms per il tasto di tastiera, creata una volta e riusata. */
+  private clickBuf: AudioBuffer | null = null;
 
   /** Va chiamato da un gesto dell'utente (click/tasto). */
   unlock() {
@@ -49,8 +60,7 @@ export class Audio {
     const ctx = this.ctx;
     if (!ctx || !this.master || this.muted) return;
     const now = ctx.currentTime;
-    const minGap = s === 'hit' || s === 'pop' ? 0.05 : s === 'pickup' ? 0.03 : 0.02;
-    if (now - (this.last.get(s) ?? -1) < minGap) return;
+    if (now - (this.last.get(s) ?? -Infinity) < (MIN_GAP[s] ?? 0.02)) return;
     this.last.set(s, now);
     switch (s) {
       case 'hit':
@@ -108,7 +118,36 @@ export class Audio {
       case 'boss':
         [110, 104, 98].forEach((f, i) => this.tone(f, f, 0.35, 'sawtooth', 0.2, i * 0.3));
         break;
+      case 'keypress': // Scorciatoie di Vim: premi «i» ed entri in INSERT. Molto basso, sotto i colpi
+        this.click(0.09);
+        this.tone(240, 150, 0.035, 'triangle', 0.035, 0.006); // il fondo corsa del tasto
+        break;
     }
+  }
+
+  /** Clic di tasto meccanico: rumore filtrato attorno ai 3-4 kHz, timbro e altezza un po' diversi a ogni colpo. */
+  private click(vol: number) {
+    const ctx = this.ctx!;
+    if (!this.clickBuf) {
+      const len = Math.floor(ctx.sampleRate * 0.012);
+      this.clickBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = this.clickBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        const k = 1 - i / len;
+        d[i] = (Math.random() * 2 - 1) * k * k;
+      }
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = this.clickBuf;
+    src.playbackRate.value = 0.9 + Math.random() * 0.2;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 3200 + Math.random() * 800;
+    bp.Q.value = 1.2;
+    const g = ctx.createGain();
+    g.gain.value = vol;
+    src.connect(bp).connect(g).connect(this.master!);
+    src.start();
   }
 
   private tone(f0: number, f1: number, dur: number, type: OscillatorType, vol: number, delay = 0) {

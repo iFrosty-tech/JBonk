@@ -39,7 +39,7 @@ telefono verticale **390×844** e **375×667**. Desktop e orizzontale sono verif
 | Minimappa | alto a destra, 150 px | 96 px | 96 px |
 | Barra del boss | `top: 96px`, centrata | `top: 84px` | `top: 176px` |
 | Banner | `top: 150px`, max 3 | `top: 124px` | `top: 230px` |
-| Slot armi + passivi | basso a sinistra, 2 righe × 4, 44 px, vuoti tratteggiati | 1 riga in basso al centro, 28 px (icona scalata a ~25 px) | come in orizzontale ma alzata di 196 px sopra i controlli |
+| Slot armi + passivi | basso a sinistra, 2 righe × 4, 44 px, vuoti tratteggiati | 1 riga in basso al centro, 28 px + bordo = 32 px (icona scalata a ~25 px) | come in orizzontale ma alzata di 196 px sopra i controlli |
 | Prompt "[E] …" / "Usa" | 18% dal fondo, centrato | idem | `+244px` dal fondo |
 | Controlli touch | — | joystick a sinistra (a riposo x 40–160), Salta/Scatto a destra, Usa sopra Salta, pausa sotto la minimappa | idem |
 | Carte (level-up, forziere, JOscar, caffè) | 3 colonne da ~322 px | 844: 3 colonne da ~260 px; **667: 2 colonne, la terza carta va sotto il bordo** | 1 colonna da ~358 px, si scorre |
@@ -49,7 +49,7 @@ telefono verticale **390×844** e **375×667**. Desktop e orizzontale sono verif
 Cosa conta per queste idee:
 
 - **Lo slot oggi mostra solo icona + livello**: non c'è posto per uno stato temporaneo. Sul telefono è 28 px: uno spicchio ci sta, un testo no.
-- **Spazio in basso su telefono orizzontale**: tra il joystick a riposo (bordo destro x ≈ 160) e lo Scatto (bordo sinistro W − 188) restano **~320 px su 667** e ~500 px su 844. Ci stanno al massimo 10 icone da 28 px.
+- **Spazio in basso su telefono orizzontale**: la riga di oggi (8 slot da 32 px col bordo, gap 4 px, stacco 10 px tra armi e passivi = 290 px) è centrata e a 667×375 arriva a 0,5 px dal bordo sinistro dello Scatto (x = W − 188), nella stessa fascia d'altezza. **Con le misure di oggi ci stanno 8 icone, non 10.** Il joystick a riposo, invece, in quella fascia occupa solo x ≈ 85–115. Per il tetto di 10 oggetti del loadout in fase 2 servono slot da 24 px (28 col bordo) e, in orizzontale, la riga ancorata a sinistra subito dopo il joystick (x ≈ 130) invece che centrata: 10 icone = ~322 px, da 130 a ~452, prima dello Scatto. In verticale a 375 px di larghezza 10 icone da 28 px col bordo ci stanno centrate.
 - **Carte**: la rarità è banda colorata più etichetta testuale (non solo colore, bene). La descrizione di un'arma nuova è lunga (Claude Code ~95 caratteri = 4 righe su telefono): su 844×390 una carta è già ~196 px dei 390 disponibili.
 - **"Non ci sta" oggi non esiste**: con gli slot pieni le carte di oggetti nuovi non vengono generate (`src/game/cards.ts:122` e `:127`). La macchinetta del caffè dà bonus permanenti che non occupano slot.
 - **Collisione di parole**: lo sprite del nemico Memory Leak porta la scritta "RAM 99%". Con la RAM come risorsa del giocatore, la stessa parola indica un nemico e una tua risorsa.
@@ -158,7 +158,7 @@ In partita, su desktop, le righe diventano "Gestione attività"; su telefono res
 | Il numero `6/9` sempre accanto alla barra | conferma il conteggio senza contare |
 | Il costo si paga all'installazione e non cresce coi livelli | le carte di upgrade restano come oggi |
 | Il budget cresce solo coi premi del JOscar (`⟨+1⟩` RAM o CPU a scelta, al massimo `⟨+2⟩` a partita) | la barra cambia scala al massimo due volte, in un momento calmo |
-| Al massimo `⟨6⟩` armi, `⟨6⟩` passivi e `⟨10⟩` oggetti in tutto | spazio fisico della riga in basso su iPhone SE in orizzontale |
+| Al massimo `⟨6⟩` armi, `⟨6⟩` passivi e `⟨10⟩` oggetti in tutto | spazio fisico della riga in basso su iPhone SE in orizzontale: 10 icone ci stanno solo con slot da 24 px e riga ancorata a sinistra (vedi l'inventario) |
 
 ### Finestra delle carte (level-up, forzieri, JOscar)
 
@@ -209,7 +209,7 @@ I forzieri non cambiano il budget: la loro finestra è quella delle carte, con b
 ### HUD in partita
 
 - **Desktop, "Gestione attività"**: le due righe di oggi in basso a sinistra, armi sopra (RAM) e passivi sotto (CPU). Ogni oggetto è un blocco largo `costo × 36 px` con l'icona al centro e il livello come oggi; la parte libera è tratteggiata; a inizio riga l'etichetta, a fine riga il numero. Con 9 RAM la riga è ~324 px, con 7 CPU ~252 px; il massimo assoluto è 11 unità (Developer con due premi in RAM), cioè ~396 px.
-- **Telefono**: la riga di icone di oggi, invariata: icone a **dimensione fissa** (28 px), armi, uno stacco di 10 px, passivi. **Nessuna barra** durante il combattimento.
+- **Telefono**: la riga di icone di oggi: icone a **dimensione fissa**, armi, uno stacco di 10 px, passivi. Fino a 8 oggetti come oggi (28 px, 32 col bordo, riga centrata); oltre 8, slot da 24 px e, in orizzontale, riga ancorata a sinistra dopo il joystick (vedi l'inventario). **Nessuna barra** durante il combattimento.
 - **Pausa**: sezione "Configurazione" con le due righe "Gestione attività" e i costi, da leggere con calma (fase 2b).
 - **Risorsa piena**: nessun avviso in partita; lo dice la riga nella finestra delle carte.
 - **Premio "+1" preso**: su desktop la riga si allunga di un'unità tratteggiata; su telefono non cambia nulla.
@@ -278,7 +278,7 @@ Se in futuro le risorse **libere** alla partenza diventano diverse, allora un ch
 - [ ] La finestra delle carte mostra le due barre su una sola riga, RAM prima di CPU, con il numero `usata/totale` accanto a ciascuna, anche a 375 px di larghezza.
 - [ ] Se il filtro ha escluso oggetti nuovi per mancanza di una risorsa, la finestra mostra la riga che lo dice; altrimenti no.
 - [ ] A 844×390 titolo, sottotitolo, barre, riga, 3 carte e "Rimanda" stanno senza scorrere (con descrizioni ≤ 60 caratteri); a 667×375 le prime 2 carte sono intere e la terza è raggiungibile scorrendo.
-- [ ] Desktop: riga delle armi = RAM e riga dei passivi = CPU, con blocchi larghi in proporzione al costo. Telefono: riga di icone a 28 px come oggi, nessuna barra in partita.
+- [ ] Desktop: riga delle armi = RAM e riga dei passivi = CPU, con blocchi larghi in proporzione al costo. Telefono: riga di icone come oggi fino a 8 oggetti (slot da 24 px oltre 8), nessuna barra in partita.
 - [ ] Con 10 oggetti installati la riga di icone su 667×375 in orizzontale non tocca joystick né Scatto.
 - [ ] Il premio "+1 RAM"/"+1 CPU" del JOscar mostra "RAM 9 → 10" (o CPU) sotto il nome e non produce banner.
 - [ ] Titolo: nessun chip del budget finché le risorse libere alla partenza sono uguali per tutti i personaggi.
@@ -325,8 +325,8 @@ Posizione di `-- INSERT --`:
 | Viewport | Posizione | Perché |
 |---|---|---|
 | Desktop 1280×720 | in basso a sinistra, subito sopra le righe degli slot, allineata a sinistra | è dove la mette Vim, accanto all'icona |
-| Telefono orizzontale | centrata subito sopra la riga degli slot (~44–60 px dal fondo) | tra joystick e Scatto c'è spazio; il prompt sta più su (18% dal fondo). Il suggerimento iniziale (`.hint`) occupa la stessa fascia ma solo nei primi 10 s, quando Vim non si può avere |
-| Telefono verticale | centrata sopra la riga degli slot alzata | il prompt "Usa" sale di ~16 px (da `+244px` a `+260px`) per non toccarla |
+| Telefono orizzontale | centrata subito sopra la riga degli slot (lo slot è alto 32 px col bordo: la scritta sta a ~48–64 px dal fondo) | tra joystick e Scatto c'è spazio. Il prompt sale a `max(18%, safe-b + 66px)` (6–9 px più su di oggi; misurati 8 px tra scritta e prompt a 844×390 e 12 px a 667×375, anche con la barra di sistema di iPhone). Il suggerimento iniziale (`.hint`) occupa la stessa fascia ma solo nei primi 10 s, quando Vim non si può avere |
+| Telefono verticale | centrata sopra la riga degli slot alzata | il prompt "Usa" sale di ~16 px (da `+244px` a `+260px`) per non toccarla: misurati 7–8 px di distanza |
 
 ```
  telefono orizzontale (844×390)
@@ -360,7 +360,7 @@ Il sottotitolo della pausa diventa una frase a caso da una lista di narrative-wr
 | File | Proprietario | Cosa cambia |
 |---|---|---|
 | `src/ui/hud.ts` | ui-ux-designer | icona dell'arma sopra il giocatore (inizio e riavvio), stato dello slot bloccato, `-- INSERT --`, Call di Gruppo sulla minimappa, righe "Gestione attività" su desktop (armi = RAM, passivi = CPU) |
-| `src/ui/style.css` | ui-ux-designer | velo, tratteggio, spicchio e lampo dello slot; scritta INSERT; prompt alzato in verticale; righe a blocchi proporzionali; chip del costo e barre della finestra delle carte |
+| `src/ui/style.css` | ui-ux-designer | velo, tratteggio, spicchio e lampo dello slot; scritta INSERT; prompt alzato (verticale `+260px`, orizzontale `max(18%, safe-b + 66px)`); slot touch da 24 px oltre 8 oggetti; righe a blocchi proporzionali; chip del costo e barre della finestra delle carte |
 | `src/ui/screens.ts` | ui-ux-designer | costo sulle carte, barre e riga "insufficiente" nella finestra delle carte, sottotitolo della pausa a caso, configurazione in pausa |
 | `src/ui/touch.ts` | ui-ux-designer | **nessuna modifica** |
 | `src/game/entities.ts`, `cards.ts`, `game.ts`, `weapons.ts` | gameplay-programmer | blocco dell'arma con tempo rimanente leggibile dall'HUD, modalità di Vim, stato "in call", colore e dimensione dei numeri, risorsa, costo e "dopo" nella `Card`, budget e "oggetti esclusi" nella `ChoiceRequest` |

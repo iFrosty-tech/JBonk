@@ -75,15 +75,20 @@ function newWeaponCard(g: Game, id: string): Card {
 function passiveCard(g: Game, id: string, rarity: number): Card {
   const def = PASSIVES[id];
   const owned = g.passives.find((p) => p.id === id);
-  let amt = def.amount * TUNING.rarity.mult[rarity];
+  const mult = TUNING.rarity.mult[rarity];
+  let amt = def.amount * mult;
   if (def.fmt === 'int') amt = Math.max(1, Math.round(amt));
+  // passivo a due modalità: una riga d'effetto per modalità, entrambe scalate dalla rarità
+  const lines = def.modes
+    ? [def.modes.still, def.modes.moving].map((m) => m.line.replace('{v}', formatStat(m.amount * mult, def.fmt)))
+    : [`${formatStat(amt, def.fmt)} ${def.description}`];
   return {
     icon: def.icon,
     name: def.name,
     tag: owned ? 'Passivo' : 'Nuovo passivo',
     rarity,
     level: owned ? `Lv ${owned.level} → ${owned.level + 1}` : 'Nuovo',
-    lines: [`${formatStat(amt, def.fmt)} ${def.description}`],
+    lines,
     apply: () => g.addPassive(id, amt),
   };
 }

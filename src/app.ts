@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { CHARACTERS } from './config/characters';
 import { BIOMES } from './config/biomes';
+import { PASSIVES } from './config/passives';
+import { TUNING } from './config/tuning';
 import { WEAPONS, WEAPON_IDS } from './config/weapons';
 import { Audio } from './game/audio';
 import { Game, type GameHooks } from './game/game';
@@ -187,6 +189,7 @@ export class App {
         this.hud?.banner(`Arma di test: ${WEAPONS[id].name}`, 'info');
       }
     }
+    if (e.code === 'KeyV') this.debugVim(g);
     if (e.code === 'KeyC') g.spawnPickup('card', 15, g.player.x + g.rig.forward.x * 4, g.player.z + g.rig.forward.z * 4);
     if (e.code === 'KeyF') g.startWave(g.player.x, g.player.z);
     if (e.code === 'KeyJ') {
@@ -195,6 +198,18 @@ export class App {
       g.interactables.push({ kind: 'joscar', x, z, y: g.world.height(x, z), used: false, charge: 0, free: true });
     }
   };
+
+  /** `#debug` + V: dà Scorciatoie di Vim al livello 1, poi lo fa salire di un livello fino al massimo. */
+  private debugVim(g: Game) {
+    const def = PASSIVES.vim;
+    const owned = g.passives.find((p) => p.id === def.id);
+    if (owned && owned.level >= def.maxLevel) this.hud?.banner(`${def.name}: livello massimo`, 'info');
+    else if (!owned && g.passives.length >= TUNING.maxPassives) this.hud?.banner('Slot dei passivi pieni', 'warn');
+    else {
+      g.addPassive(def.id, def.amount);
+      this.hud?.banner(`Passivo di test: ${def.name} Lv ${owned ? owned.level : 1}`, 'info');
+    }
+  }
 
   private resize = () => {
     const w = this.root.clientWidth;

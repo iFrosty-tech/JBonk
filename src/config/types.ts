@@ -159,6 +159,14 @@ export interface WeaponDef {
   blocks?: boolean;
 }
 
+/** Effetto di un passivo valido solo in una modalità (es. fermo o in movimento). */
+export interface PassiveMode {
+  stat: StatKey;
+  amount: number; // per livello, prima della rarità
+  /** Riga d'effetto della carta: `{v}` diventa il valore formattato (es. "+12%"). */
+  line: string;
+}
+
 export interface PassiveDef {
   id: string;
   name: string;
@@ -168,6 +176,12 @@ export interface PassiveDef {
   amount: number;
   fmt: StatFormat;
   maxLevel: number;
+  /**
+   * Passivo a due modalità (Scorciatoie di Vim): al posto di `stat` vale l'effetto della modalità attiva.
+   * `still` = nessun input di movimento da `TUNING.stillDelay` secondi, `moving` = altrimenti.
+   * `stat` e `amount` restano la base della scala: ogni modalità vale `amount` della modalità × (valore accumulato / `amount`).
+   */
+  modes?: { still: PassiveMode; moving: PassiveMode };
 }
 
 /** Bonus della macchinetta del caffè: non occupano slot. */
