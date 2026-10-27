@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/media/hero.gif" alt="Gameplay: il Developer circondato da bug, email e ticket, con paperelle, Claude Code, scudi Angular e alveare JPanik" width="640">
+  <img src="docs/media/hero.gif" alt="Gameplay nel piazzale dell'Enjoy Sporting Club: il Developer circondato da bug, email e ticket, con paperelle, Claude Code, scudi Angular e alveare JPanik" width="640">
 </p>
 
 <p align="center">
@@ -73,7 +73,7 @@ All'avvio della partita il gioco chiede lo schermo intero dove il browser lo per
 su iPhone si ottiene aggiungendo la pagina alla schermata Home.
 
 <p align="center">
-  <img src="docs/media/mobile.png" alt="JBonk su telefono in orizzontale: joystick sotto il pollice sinistro, pulsanti Salta e Scatto a destra, HUD compatto" width="640">
+  <img src="docs/media/mobile.png" alt="JBonk su telefono in orizzontale, al tramonto tra la piscina e i campi in terra rossa: joystick sotto il pollice sinistro, pulsanti Salta e Scatto a destra, HUD compatto" width="640">
 </p>
 
 Con `#debug` nell'URL: `L` level-up, `B` boss, `G` invincibile, `K` uccidi tutti, `T` +1 ora, `O` +100 €, `N` nuova arma (prima le ultime aggiunte), `C` carta Soldo, `F` onda del radar NGH, `J` statuetta JOscar.
@@ -192,11 +192,11 @@ pensilina blu e le colonnine; bar e ristoranti con vetrine e tende a strisce nei
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/media/aerial-helios.png" alt="Vista dall'alto di Mezzocammino al tramonto: palazzi con le altezze vere, strade, campi sportivi e alberi"></td>
-    <td width="50%"><img src="docs/media/aerial-atlas.png" alt="Vista dall'alto di Mezzocammino di notte: finestre illuminate e lampioni accesi lungo le strade"></td>
+    <td width="50%"><img src="docs/media/aerial-helios.png" alt="Vista dall'alto di Mezzocammino al tramonto: l'Enjoy Sporting Club con terra rossa, padel e calcetto, la sede JPanik in vetro e le palazzine con i tetti in coppi"></td>
+    <td width="50%"><img src="docs/media/aerial-atlas.png" alt="Vista dall'alto di Mezzocammino di notte: finestre e vetrine illuminate, lampioni accesi lungo le strade"></td>
   </tr>
   <tr>
-    <td align="center" colspan="2"><sub>Il quartiere visto dall'alto: la sede JPanik è il palazzo grigio al centro, accanto ai campi sportivi</sub></td>
+    <td align="center" colspan="2"><sub>Il quartiere visto dalla Colombo: in primo piano l'Enjoy Sporting Club (terra rossa, padel, calcetto, cupola e piscina), subito dietro la sede JPanik in vetro</sub></td>
   </tr>
 </table>
 
