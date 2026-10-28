@@ -42,6 +42,8 @@ npm run build      # build di produzione in dist/ (un solo game.js)
 npm run artifact   # build + artifact/ (pagina + game.js pronti da pubblicare su qualsiasi hosting statico)
 ```
 
+Online su **https://ifrosty-tech.github.io/JBonk/**: il workflow `.github/workflows/deploy-pages.yml` fa la build e pubblica `dist/` su GitHub Pages a ogni push su `main` (si può lanciare anche a mano da Actions). Serve una sola impostazione una tantum: Settings → Pages → Source: **GitHub Actions**.
+
 ## Comandi
 
 | Tasto | Azione |
